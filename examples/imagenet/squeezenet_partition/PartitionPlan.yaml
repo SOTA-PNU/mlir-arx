@@ -1,0 +1,74 @@
+---
+- name: squeezenet
+  numPartitions: 2
+  backendNames: CPU:CPU
+  emitNames: Obj:Obj
+  partitionNames: p0:p1
+  nodeToPartition:
+    :Conv_0-p0
+    :Relu_1-p0
+    :MaxPool_2-p1
+    :Conv_3-p1
+    :Relu_4-p1
+    :Conv_5-p1
+    :Relu_6-p1
+    :Conv_7-p1
+    :Relu_8-p1
+    :Concat_9-p1
+    :Conv_10-p1
+    :Relu_11-p1
+    :Conv_12-p1
+    :Relu_13-p1
+    :Conv_14-p1
+    :Relu_15-p1
+    :Concat_16-p1
+    :MaxPool_17-p1
+    :Conv_18-p1
+    :Relu_19-p1
+    :Conv_20-p1
+    :Relu_21-p1
+    :Conv_22-p1
+    :Relu_23-p1
+    :Concat_24-p1
+    :Conv_25-p1
+    :Relu_26-p1
+    :Conv_27-p1
+    :Relu_28-p1
+    :Conv_29-p1
+    :Relu_30-p1
+    :Concat_31-p1
+    :MaxPool_32-p1
+    :Conv_33-p1
+    :Relu_34-p1
+    :Conv_35-p1
+    :Relu_36-p1
+    :Conv_37-p1
+    :Relu_38-p1
+    :Concat_39-p1
+    :Conv_40-p1
+    :Relu_41-p1
+    :Conv_42-p1
+    :Relu_43-p1
+    :Conv_44-p1
+    :Relu_45-p1
+    :Concat_46-p1
+    :Conv_47-p1
+    :Relu_48-p1
+    :Conv_49-p1
+    :Relu_50-p1
+    :Conv_51-p1
+    :Relu_52-p1
+    :Concat_53-p1
+    :Conv_54-p1
+    :Relu_55-p1
+    :Conv_56-p1
+    :Relu_57-p1
+    :Conv_58-p1
+    :Relu_59-p1
+    :Concat_60-p1
+    :Dropout_61-p1
+    :Conv_62-p1
+    :Relu_63-p1
+    :GlobalAveragePool_64-p1
+    :Softmax_65-p1
+...
