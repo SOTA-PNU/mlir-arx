@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
   omTensorListDestroy(tensorListOut);
   omTensorListDestroy(tensorListIn);
 
-
+  assert(digit == 285);
 
 //  printf("Te end of main()\n");
   return 0;

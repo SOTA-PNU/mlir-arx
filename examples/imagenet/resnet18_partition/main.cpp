@@ -13,8 +13,7 @@ extern "C" OMTensorList *run_p1_resnet18o3(OMTensorList *);
 int main(int argc, char **argv) {
 
   // Create an input tensor list of 1 tensor.
-  int inputNum = 1;
-  OMTensor *inputTensors[inputNum];
+  OMTensor *inputTensors[2];
   // The first input is of tensor<1x1x28x28xf32>.
   int64_t rank = 4;
   int64_t shape[] = {1 , 224 , 224, 3 };
@@ -31,14 +30,18 @@ int main(int argc, char **argv) {
 
 //  // Create a tensor list using omTensorListCreate (returns a pointer to the OMTensorList).
   inputTensors[0] = tensor;
-  OMTensorList *tensorListIn = omTensorListCreate(inputTensors, inputNum);
+  OMTensorList *tensorListIn = omTensorListCreate(inputTensors, 1);
 //  // Compute outputs.
   OMTensorList *tensorListOut = run_p0_resnet18o3(tensorListIn);
 ////
 ////  // Extract the output. The model defines one output of type tensor<1x10xf32>.
-  OMTensor *tensor_p1 = omTensorListGetOmtByIndex(tensorListOut, 0);
-  inputTensors[0] = tensor_p1;
-  tensorListIn = omTensorListCreate(inputTensors, inputNum);
+  OMTensor *tensor_p0_out0 = omTensorListGetOmtByIndex(tensorListOut, 0);
+  OMTensor *tensor_p0_out1 = omTensorListGetOmtByIndex(tensorListOut, 1);
+
+  inputTensors[0] = tensor_p0_out1;
+  inputTensors[1] = tensor_p0_out0;
+
+  tensorListIn = omTensorListCreate(inputTensors, 2);
   tensorListOut = run_p1_resnet18o3(tensorListIn);
 
   OMTensor *y = omTensorListGetOmtByIndex(tensorListOut, 0);
@@ -65,7 +68,7 @@ int main(int argc, char **argv) {
   omTensorListDestroy(tensorListOut);
   omTensorListDestroy(tensorListIn);
 
-
+  assert(digit == 285);
 
 //  printf("Te end of main()\n");
   return 0;

@@ -7,7 +7,7 @@ add_custom_command(OUTPUT
 		${CMAKE_CURRENT_BINARY_DIR}/ptout_imagenet/resnet18O3_p1.o
 		COMMAND
 		onnx-mlir-part -O3 -EmitObj -o resnet18O3 -emit-folder=ptout_imagenet
-		-device-cfg=/home/msyu/CLionProjects/onnx-mlir-part/examples/partition/deviceConfig.yaml
+		-device-cfg=/home/msyu/CLionProjects/onnx-mlir-part/examples/partition/DeviceConfig.yaml
 		-partition-plan=/home/msyu/CLionProjects/onnx-mlir-part/examples/imagenet/resnet18_partition/PartitionPlan.yaml
 		/home/msyu/Dropbox/Demo/models/mxnet_exported_resnet18.onnx
 

@@ -11,26 +11,26 @@
     :resnetv10_conv0_fwd-p0
     :resnetv10_batchnorm0_fwd-p0
     :resnetv10_relu0_fwd-p0
-    :resnetv10_pool0_fwd-p1
-    :resnetv10_stage1_conv0_fwd-p1
-    :resnetv10_stage1_batchnorm0_fwd-p1
-    :resnetv10_stage1_relu0_fwd-p1
-    :resnetv10_stage1_conv1_fwd-p1
-    :resnetv10_stage1_batchnorm1_fwd-p1
-    :resnetv10_stage1__plus0-p1
-    :resnetv10_stage1_activation0-p1
-    :resnetv10_stage1_conv2_fwd-p1
-    :resnetv10_stage1_batchnorm2_fwd-p1
-    :resnetv10_stage1_relu1_fwd-p1
-    :resnetv10_stage1_conv3_fwd-p1
-    :resnetv10_stage1_batchnorm3_fwd-p1
-    :resnetv10_stage1__plus1-p1
-    :resnetv10_stage1_activation1-p1
-    :resnetv10_stage2_conv2_fwd-p1
-    :resnetv10_stage2_batchnorm2_fwd-p1
-    :resnetv10_stage2_conv0_fwd-p1
-    :resnetv10_stage2_batchnorm0_fwd-p1
-    :resnetv10_stage2_relu0_fwd-p1
+    :resnetv10_pool0_fwd-p0
+    :resnetv10_stage1_conv0_fwd-p0
+    :resnetv10_stage1_batchnorm0_fwd-p0
+    :resnetv10_stage1_relu0_fwd-p0
+    :resnetv10_stage1_conv1_fwd-p0
+    :resnetv10_stage1_batchnorm1_fwd-p0
+    :resnetv10_stage1__plus0-p0
+    :resnetv10_stage1_activation0-p0
+    :resnetv10_stage1_conv2_fwd-p0
+    :resnetv10_stage1_batchnorm2_fwd-p0
+    :resnetv10_stage1_relu1_fwd-p0
+    :resnetv10_stage1_conv3_fwd-p0
+    :resnetv10_stage1_batchnorm3_fwd-p0
+    :resnetv10_stage1__plus1-p0
+    :resnetv10_stage1_activation1-p0
+    :resnetv10_stage2_conv2_fwd-p0
+    :resnetv10_stage2_batchnorm2_fwd-p0
+    :resnetv10_stage2_conv0_fwd-p0
+    :resnetv10_stage2_batchnorm0_fwd-p0
+    :resnetv10_stage2_relu0_fwd-p0
     :resnetv10_stage2_conv1_fwd-p1
     :resnetv10_stage2_batchnorm1_fwd-p1
     :resnetv10_stage2__plus0-p1

@@ -1714,7 +1714,23 @@ const onnx::ValueInfoProto* getOutputValueProto(std::string name, const onnx::Mo
 }
 
 
-void getPrevNode(onnx::NodeProto* node, std::vector<onnx::NodeProto*>* prevNodes, onnx::ModelProto* model) {
+
+bool isOutputInOtherPartition(onnx::NodeProto* node, std::vector<onnx::NodeProto> nodeList) {
+  for(auto snode: nodeList) {
+    for(int k = 0; k < node->output_size(); k++) {
+      std::string outName = node->output(k); //current input
+
+      for(int sk = 0; sk < snode.input_size(); sk++) {
+        std::string sinName = snode.input(sk); //previous output
+        if(!sinName.compare(outName)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+void getPrevNode(onnx::NodeProto* node, std::vector<onnx::NodeProto*>* prevNodes, const onnx::ModelProto* model) {
   for(int i = 0; i < model->graph().node_size(); i++) {
     auto snode = model->graph().node(i);
 
@@ -1760,6 +1776,36 @@ bool isInputExist(const std::string& inName, onnx::ModelProto* model) {
   return false;
 }
 
+
+bool isInputInOtherPartition(onnx::NodeProto* node, std::vector<onnx::NodeProto> nodeList) {
+  for(auto snode: nodeList) {
+    for(int k = 0; k < node->input_size(); k++) {
+      std::string inName = node->input(k); //current input
+
+      for(int sk = 0; sk < snode.output_size(); sk++) {
+        std::string soutName = snode.output(sk); //previous output
+        if(!soutName.compare(inName)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+bool isOutputOfOtherPartition(const std::string& input, std::vector<onnx::NodeProto> nodeList) {
+  for(auto node: nodeList) {
+    for (auto output : node.output()) {
+      if (!input.compare(output)) {
+//        std::cout << "== [isOutputOfOtherPartition] node = " << node.name() << " output = " << output << std::endl;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+
 bool isOutputExist(const std::string& outName, onnx::ModelProto* model) {
   for(auto output: model->graph().output()) {
       if (!outName.compare(output.name()))
@@ -1769,7 +1815,7 @@ bool isOutputExist(const std::string& outName, onnx::ModelProto* model) {
 }
 
 std::unique_ptr<onnx::ModelProto> makeSubgraph(size_t seq, std::string partitionName,
-  const onnx::ModelProto &originalModel, onnx::ModelProto* prevModel) {
+  const onnx::ModelProto &originalModel) {
 
   std::cout << "== [makeSubgraph] partitionName = " << partitionName << std::endl;
 
@@ -1781,8 +1827,6 @@ std::unique_ptr<onnx::ModelProto> makeSubgraph(size_t seq, std::string partition
   }
 
   std::vector<std::string> pNodeList;
-//  onnx::NodeProto *firstNode;
-//  onnx::NodeProto *lastNode;
   for(auto pt: partition_->getPartitionPlanInfo().nodePartitionMap_) {
     if(!pt.second.compare(partitionName)) { //partition name
       pNodeList.push_back(pt.first);
@@ -1791,10 +1835,10 @@ std::unique_ptr<onnx::ModelProto> makeSubgraph(size_t seq, std::string partition
 
   std::vector<const onnx::ValueInfoProto*> graphInputList, subGraphInputList;
   for (int i = 0; i < originalModel.graph().input_size(); i++) {
-//    std::cout << "graph input = " << originalModel.graph().input(i).name().c_str() << std::endl;
     graphInputList.push_back(&originalModel.graph().input(i));
   }
 
+  std::vector<onnx::NodeProto> restNodeList;
   for (int i = 0; i < originalModel.graph().node_size(); i++) {
       auto snode = originalModel.graph().node(i);
       if(std::find(pNodeList.begin(), pNodeList.end(), snode.name()) != pNodeList.end()) {
@@ -1804,13 +1848,11 @@ std::unique_ptr<onnx::ModelProto> makeSubgraph(size_t seq, std::string partition
           for(auto sin: snode.input()) {
             if(!gin->name().compare(sin)) {
               subGraphInputList.push_back(gin);
-//              std::cout << "snode input = " << sin << std::endl;
-//
-//              //              auto subin = submodel->mutable_graph()->add_input();
-////              subin->CopyFrom(*gin);
             }
           }
         }
+      } else {
+        restNodeList.push_back(snode);
       }
   }
 
@@ -1818,33 +1860,45 @@ std::unique_ptr<onnx::ModelProto> makeSubgraph(size_t seq, std::string partition
   std::vector<onnx::NodeProto> inNodeList, outNodeList;
    for(auto node: submodel->graph().node()) {
 
-    //node에 연결된 이전 노드가 submodel 내에 없으면 input을 graph의 input으로 추가
+//    node에 연결된 이전 노드가 submodel 내에 없으면 input을 graph의 input으로 추가
     getPrevNode(&node, &tmpList, submodel.get());
     if(tmpList.empty()) {
-//      std::cout << "No prev nodes!! name = " << node.name() << std::endl;
       inNodeList.push_back(node);
     } else {
       tmpList.clear();
     }
+
+    //node의 input이 다른 파티션에  포함된 노드의 출력이면 node는 현재 파티션의 입력 노드
+    if(isInputInOtherPartition(&node, restNodeList)) {
+        inNodeList.push_back(node);
+    }
+
     //node에 연결된 다음 노드가 submodel 내에 없으면 output을 graph의 output으로 추가
     getNextNode(&node, &tmpList, submodel.get());
     if(tmpList.empty()) {
-//      std::cout << "No next nodes!! name = " << node.name() << std::endl;
       outNodeList.push_back(node);
     } else {
       tmpList.clear();
     }
+
+    //node의 output이 다른 파티션에  포함된 노드의 입력이면 node는 현재 파티션의 출력 노드
+    if(isOutputInOtherPartition(&node, restNodeList)) {
+        outNodeList.push_back(node);
+    }
   }
 
   for(auto inNode: inNodeList) {
-
     for(int i = 0; i < inNode.input_size(); i++) {
+
       if(isInputExist(inNode.input(i), submodel.get()))
+        continue;
+
+      if(!isOutputOfOtherPartition(inNode.input(i), restNodeList))
         continue;
 
       onnx::ValueInfoProto* gin = submodel->mutable_graph()->add_input();
       setDimByName(inNode.input(i), originalModel.graph(), gin);
-//      std::cout << "input name = " << inNode.input(i) << std::endl;
+
       const onnx::ValueInfoProto *inputV =
           getInputValueProto(inNode.input(i), originalModel);
       if(inputV != NULL) {
@@ -1852,7 +1906,6 @@ std::unique_ptr<onnx::ModelProto> makeSubgraph(size_t seq, std::string partition
       } else {
         gin->set_name(inNode.input(i));
       }
-
     }
   }
 
@@ -1864,7 +1917,6 @@ std::unique_ptr<onnx::ModelProto> makeSubgraph(size_t seq, std::string partition
 
       auto *gout = submodel->mutable_graph()->add_output();
       setDimByName(outNode.output(i), originalModel.graph(), gout);
-
       const onnx::ValueInfoProto *outputV =
           getOutputValueProto(outNode.output(i), originalModel);
       if(outputV != NULL) {
@@ -1878,7 +1930,6 @@ std::unique_ptr<onnx::ModelProto> makeSubgraph(size_t seq, std::string partition
   for(auto totalin: subGraphInputList) {
       bool found = false;
       for(auto subin: submodel->graph().input()) {
-//        std::cout << "subin = " << subin.name() << std::endl;
         if(!totalin->name().compare(subin.name())) {
           found = true;
           break;
@@ -1904,12 +1955,12 @@ void partitionModel(const onnx::ModelProto &model, std::vector<std::pair<std::st
   auto partInfo = partition_->getPartitionPlanInfo();
 //  if(partInfo.partitionNames_.size() == 0) {
   auto partNames = partInfo.partitionNames_;
-  onnx::ModelProto* prevModel = nullptr;
+//  onnx::ModelProto* prevModel = nullptr;
   for (size_t p = 0; p < partNames.size(); p++) {
     std::string name = partNames.at(p);
 
 
-    auto submodel = makeSubgraph(p, name, model, prevModel);
+    auto submodel = makeSubgraph(p, name, model);
     submodel->mutable_graph()->set_name(name);
 
     // Write the submodels to files
@@ -1920,7 +1971,7 @@ void partitionModel(const onnx::ModelProto &model, std::vector<std::pair<std::st
     if (!submodel->SerializeToOstream(&submodel_stream)) {
       std::cerr << "Failed to write submodel." << std::endl;
     }
-    prevModel = submodel.get();
+//    prevModel = submodel.get();
     submodelList.push_back(std::make_pair(name, std::move(submodel)));
   }
 //  } else {

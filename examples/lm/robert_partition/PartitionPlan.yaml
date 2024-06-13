@@ -7,7 +7,7 @@
   nodeToPartition: 
     :Shape_0-p0
     :Constant_1-p0
-    :Gather_2-p1
+    :Gather_2-p0
     :Shape_3-p1
     :Constant_4-p1
     :Gather_5-p1

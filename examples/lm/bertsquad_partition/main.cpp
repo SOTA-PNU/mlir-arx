@@ -71,6 +71,7 @@
 //}
 
 
+
 // Declare the inference entry point.
 extern "C" OMTensorList *run_main_graph(OMTensorList *);
 int main(int argc, char **argv) {
@@ -88,17 +89,19 @@ int main(int argc, char **argv) {
 //  OMTensor *inputTensors[inputNum];
   // Initialize input data (Assuming the use case for a BERT model)
   int64_t input_ids[10] = {101, 2054, 2003, 1996, 2171, 1997, 1996, 2922, 5532, 102};
-  int64_t attention_mask[10] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+//  int64_t attention_mask[10] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
-  int64_t rank = 2; //2D
-  int64_t input_shape[] = {1, static_cast<int64_t>(10)};
+//  int64_t rank = 2; //2D
+  int64_t input_shape[] = {static_cast<int64_t>(10)};
+//  int64_t mask_shape[] = {1, static_cast<int64_t>(10)};
 
-  OMTensor *tensor_in = omTensorCreateWithOwnership(input_ids, input_shape, rank, ONNX_TYPE_INT64, /*owning=*/true);
-  OMTensor *tensor_mask = omTensorCreateWithOwnership(attention_mask, input_shape, rank, ONNX_TYPE_INT64, /*owning=*/true);
+  OMTensor *tensor_in = omTensorCreateWithOwnership(input_ids, input_shape, 1, ONNX_TYPE_INT64, /*owning=*/true);
+//  OMTensor *tensor_mask = omTensorCreateWithOwnership(attention_mask, mask_shape, 2, ONNX_TYPE_INT64, /*owning=*/true);
 
   // Create a tensor list using omTensorListCreate (returns a pointer to the OMTensorList).
-  OMTensor* inputTensors[2] = {tensor_in, tensor_mask};
-  OMTensorList *tensorListIn = omTensorListCreate(inputTensors, 2);
+//  OMTensor* inputTensors[4] = {tensor_mask, tensor_mask, tensor_mask, tensor_in};
+  OMTensor* inputTensors[1] = {tensor_in};
+  OMTensorList *tensorListIn = omTensorListCreate(inputTensors, 1);
 
   auto start = std::chrono::high_resolution_clock::now();
   // Compute outputs.
