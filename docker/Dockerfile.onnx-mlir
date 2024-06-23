@@ -1,4 +1,4 @@
-ARG BASE_IMAGE="ubuntu:jammy"
+ARG BASE_IMAGE
 FROM ${BASE_IMAGE} AS onnx-mlir-test
 
 # Label the base image so it can be cleaned up after becoming dangling
@@ -12,8 +12,6 @@ WORKDIR ${WORK_DIR}
 
 # Copy onnx-mlir from the pull request
 COPY . onnx-mlir
-
-RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends autoconf automake cmake curl git libtool make ninja-build python3 python3-pip g++
 
 # Setup onnx
 # Onnx commit 9fdb3bbd7b8c99b7b6e356069193ba7150405fce switched from
