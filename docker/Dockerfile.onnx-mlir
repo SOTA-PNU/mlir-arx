@@ -1,4 +1,4 @@
-ARG BASE_IMAGE
+ARG BASE_IMAGE="ubuntu:jammy"
 FROM ${BASE_IMAGE} AS onnx-mlir-test
 
 # Label the base image so it can be cleaned up after becoming dangling
