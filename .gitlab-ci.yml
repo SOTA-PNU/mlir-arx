@@ -1,5 +1,6 @@
 stages:
-  - docker-build
+  - docker-build-llvm
+  - docker-build-mlir
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
@@ -12,8 +13,45 @@ workflow:
       when: never
     - if: $CI_COMMIT_BRANCH
 
-docker-build:
-  stage: docker-build
+docker-build-llvm:
+  stage: docker-build-llvm
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  before_script:
+    - echo "{\"auths\":{\"${DOCKER_REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${DOCKER_USERNAME}" "${DOCKER_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+  script:
+    - /kaniko/executor
+      --context "${CI_PROJECT_DIR}"
+      --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.llvm-project"
+      --destination "${DOCKER_IMAGE}:${CI_COMMIT_REF_NAME}"
+      --destination "${DOCKER_IMAGE}:latest"
+  tags:
+    - etri-compute
+  rules:
+    - if: $CI_COMMIT_REF_PROTECTED == "true"
+      changes:
+        - docker/Dockerfile.llvm-project
+
+docker-build-llvm-no-push:
+  stage: docker-build-llvm
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  script:
+    - /kaniko/executor
+      --context "${CI_PROJECT_DIR}"
+      --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.llvm-project"
+      --no-push
+  tags:
+    - etri-compute
+  rules:
+    - if: $CI_COMMIT_REF_PROTECTED == "false"
+      changes:
+        - docker/Dockerfile.llvm-project
+
+docker-build-mlir:
+  stage: docker-build-mlir
   image:
     name: gcr.io/kaniko-project/executor:debug
     entrypoint: [""]
@@ -32,8 +70,8 @@ docker-build:
       changes:
         - docker/Dockerfile.onnx-mlir
 
-docker-build-no-push:
-  stage: docker-build
+docker-build-mlir-no-push:
+  stage: docker-build-mlir
   image:
     name: gcr.io/kaniko-project/executor:debug
     entrypoint: [""]
