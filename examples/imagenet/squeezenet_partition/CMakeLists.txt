@@ -35,12 +35,12 @@ set_target_properties(squeezenetO3PartExe
 		RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-add_custom_command(
-		TARGET squeezenetO3PartExe POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy
-		${CMAKE_CURRENT_SOURCE_DIR}/cat_285.png
-		${CMAKE_CURRENT_BINARY_DIR}/cat_285.png
-)
+#add_custom_command(
+#		TARGET squeezenetO3PartExe POST_BUILD
+#		COMMAND ${CMAKE_COMMAND} -E copy
+#		${CMAKE_CURRENT_SOURCE_DIR}/cat_285.png
+#		${CMAKE_CURRENT_BINARY_DIR}/cat_285.png
+#)
 
 
 add_custom_command(OUTPUT

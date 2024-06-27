@@ -1,11 +1,8 @@
-//#include <iostream>
-#include <vector>
-//#include <assert.h>
-//#include <png.h>
 
+#include <chrono>
 #include "input.h"
 #include "OnnxMlirRuntime.h"
-//
+
 //// Declare the inference entry point.
 extern "C" OMTensorList *run_p0_resnet18o3(OMTensorList *);
 extern "C" OMTensorList *run_p1_resnet18o3(OMTensorList *);
@@ -32,6 +29,8 @@ int main(int argc, char **argv) {
   inputTensors[0] = tensor;
   OMTensorList *tensorListIn = omTensorListCreate(inputTensors, 1);
 //  // Compute outputs.
+
+  auto start = std::chrono::high_resolution_clock::now();
   OMTensorList *tensorListOut = run_p0_resnet18o3(tensorListIn);
 ////
 ////  // Extract the output. The model defines one output of type tensor<1x10xf32>.
@@ -43,6 +42,12 @@ int main(int argc, char **argv) {
 
   tensorListIn = omTensorListCreate(inputTensors, 2);
   tensorListOut = run_p1_resnet18o3(tensorListIn);
+
+  auto stop = std::chrono::high_resolution_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+  std::cout << "Inference time: "
+            << duration.count() << " msec" << std::endl;
+
 
   OMTensor *y = omTensorListGetOmtByIndex(tensorListOut, 0);
   float *prediction = (float *)omTensorGetDataPtr(y);

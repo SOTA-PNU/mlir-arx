@@ -41,12 +41,12 @@ set_target_properties(resnet18O3PartExe
 		PROPERTIES
 		RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
-
-add_custom_command(
-		TARGET resnet18O3PartExe POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy
-		${CMAKE_CURRENT_SOURCE_DIR}/test.png
-		${CMAKE_CURRENT_BINARY_DIR}/test.png
-)
+#
+#add_custom_command(
+#		TARGET resnet18O3PartExe POST_BUILD
+#		COMMAND ${CMAKE_COMMAND} -E copy
+#		${CMAKE_CURRENT_SOURCE_DIR}/test.png
+#		${CMAKE_CURRENT_BINARY_DIR}/test.png
+#)
 
 
