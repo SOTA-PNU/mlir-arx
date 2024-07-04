@@ -24,8 +24,9 @@ docker-build-llvm:
     - /kaniko/executor
       --context "${CI_PROJECT_DIR}"
       --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.llvm-project"
-      --destination "${DOCKER_IMAGE}:${CI_COMMIT_REF_NAME}"
-      --destination "${DOCKER_IMAGE}:latest"
+      --destination "onesai1/onnx-mlir-llvm:${CI_COMMIT_REF_NAME}"
+      --destination "onesai1/onnx-mlir-llvm:latest"
+      --build-arg "NPROC=40"
   tags:
     - etri-compute
   rules:
@@ -43,6 +44,7 @@ docker-build-llvm-no-push:
     - /kaniko/executor
       --context "${CI_PROJECT_DIR}"
       --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.llvm-project"
+      --build-arg "NPROC=40"
       --no-push
   tags:
     - etri-compute
@@ -52,43 +54,45 @@ docker-build-llvm-no-push:
         - docker/Dockerfile.llvm-project
         - .gitlab-ci.yml
 
-docker-build-mlir:
-  stage: docker-build-mlir
-  image:
-    name: gcr.io/kaniko-project/executor:debug
-    entrypoint: [""]
-  before_script:
-    - echo "{\"auths\":{\"${DOCKER_REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${DOCKER_USERNAME}" "${DOCKER_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
-  script:
-    - /kaniko/executor
-      --context "${CI_PROJECT_DIR}"
-      --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.onnx-mlir"
-      --destination "${DOCKER_IMAGE}:${CI_COMMIT_REF_NAME}"
-      --destination "${DOCKER_IMAGE}:latest"
-      --build-arg "BASE_IMAGE=onnxmlir/onnx-mlir-llvm-static:amd64"
-  tags:
-    - etri-compute
-  rules:
-    - if: $CI_COMMIT_REF_PROTECTED == "true"
-      changes:
-        - docker/Dockerfile.onnx-mlir
-        - .gitlab-ci.yml
+# docker-build-mlir:
+#   stage: docker-build-mlir
+#   image:
+#     name: gcr.io/kaniko-project/executor:debug
+#     entrypoint: [""]
+#   before_script:
+#     - echo "{\"auths\":{\"${DOCKER_REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${DOCKER_USERNAME}" "${DOCKER_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+#   script:
+#     - /kaniko/executor
+#       --context "${CI_PROJECT_DIR}"
+#       --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.onnx-mlir"
+#       --destination "onesai1/onnx-mlir-part:${CI_COMMIT_REF_NAME}"
+#       --destination "onesai1/onnx-mlir-part:latest"
+#       --build-arg "BASE_IMAGE=onesai1/onnx-mlir-llvm:latest"
+#       --build-arg "NPROC=40"
+#   tags:
+#     - etri-compute
+#   rules:
+#     - if: $CI_COMMIT_REF_PROTECTED == "true"
+#       changes:
+#         - docker/Dockerfile.onnx-mlir
+#         - .gitlab-ci.yml
 
-docker-build-mlir-no-push:
-  stage: docker-build-mlir
-  image:
-    name: gcr.io/kaniko-project/executor:debug
-    entrypoint: [""]
-  script:
-    - /kaniko/executor
-      --context "${CI_PROJECT_DIR}"
-      --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.onnx-mlir"
-      --build-arg "BASE_IMAGE=onnxmlir/onnx-mlir-llvm-static:amd64"
-      --no-push
-  tags:
-    - etri-compute
-  rules:
-    - if: $CI_COMMIT_REF_PROTECTED == "false"
-      changes:
-        - docker/Dockerfile.onnx-mlir
-        - .gitlab-ci.yml
+# docker-build-mlir-no-push:
+#   stage: docker-build-mlir
+#   image:
+#     name: gcr.io/kaniko-project/executor:debug
+#     entrypoint: [""]
+#   script:
+#     - /kaniko/executor
+#       --context "${CI_PROJECT_DIR}"
+#       --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.onnx-mlir"
+#       --build-arg "BASE_IMAGE=onesai1/onnx-mlir-llvm:latest"
+#       --build-arg "NPROC=40"
+#       --no-push
+#   tags:
+#     - etri-compute
+#   rules:
+#     - if: $CI_COMMIT_REF_PROTECTED == "false"
+#       changes:
+#         - docker/Dockerfile.onnx-mlir
+#         - .gitlab-ci.yml
