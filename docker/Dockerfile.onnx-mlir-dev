@@ -35,7 +35,7 @@ RUN LLVM_PROJECT_ROOT=${WORK_DIR}/llvm-project \
 # (dependent libzdnn is built on s390x only)
     && CC=clang CXX=clang++ \
        cmake -G Ninja \
-             -DCMAKE_CXX_COMPILER=/usr/bin/c++ \
+            #  -DCMAKE_CXX_COMPILER=/usr/bin/c++ \
              -DMLIR_DIR=${LLVM_PROJECT_ROOT}/build/lib/cmake/mlir \
              -DCMAKE_BUILD_TYPE=Debug \
              -DONNX_MLIR_TEST_OPTLEVEL=0 \
