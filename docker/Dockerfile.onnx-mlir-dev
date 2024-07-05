@@ -14,6 +14,7 @@ WORKDIR ${WORK_DIR}
 COPY . onnx-mlir
 
 ARG DEBIAN_FRONTEND=noninteractive
+
 RUN apt-get update && apt-get install -y --no-install-recommends python3-pybind11
 
 # Setup onnx
