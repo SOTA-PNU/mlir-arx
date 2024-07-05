@@ -62,7 +62,7 @@ docker-build-mlir:
   script:
     - /kaniko/executor
       --context "${CI_PROJECT_DIR}"
-      --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.onnx-mlir"
+      --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.onnx-mlir-dev"
       --destination "onesai1/onnx-mlir-part:${CI_COMMIT_REF_NAME}"
       --destination "onesai1/onnx-mlir-part:latest"
       --build-arg "BASE_IMAGE=onesai1/onnx-mlir-llvm:latest"
@@ -83,7 +83,7 @@ docker-build-mlir-no-push:
   script:
     - /kaniko/executor
       --context "${CI_PROJECT_DIR}"
-      --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.onnx-mlir"
+      --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.onnx-mlir-dev"
       --build-arg "BASE_IMAGE=onesai1/onnx-mlir-llvm:latest"
       --build-arg "NPROC=40"
       --no-push
