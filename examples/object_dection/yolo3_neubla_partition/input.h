@@ -3,22 +3,20 @@
 #include <png.h>
 #include <string.h>
 
-//#define DEFAULT_HEIGHT 224
-//#define DEFAULT_WIDTH 224
+#define DEFAULT_HEIGHT 224
+#define DEFAULT_WIDTH 224
 
-size_t HEIGHT = 224;
-size_t WIDTH = 224;
 void transpose(float* &in, float* &out) {
 
-  float (*inPtr)[1][3][HEIGHT][WIDTH];
-  float (*outPtr)[1][HEIGHT][WIDTH][3];
+  float (*inPtr)[1][3][DEFAULT_HEIGHT][DEFAULT_WIDTH];
+  float (*outPtr)[1][DEFAULT_HEIGHT][DEFAULT_WIDTH][3];
 
-  inPtr = (float (*)[1][3][HEIGHT][WIDTH])in;
-  outPtr = (float (*)[1][HEIGHT][WIDTH][3])out;
+  inPtr = (float (*)[1][3][DEFAULT_HEIGHT][DEFAULT_WIDTH])in;
+  outPtr = (float (*)[1][DEFAULT_HEIGHT][DEFAULT_WIDTH][3])out;
 
   for (int j=0; j<3; j++){
-    for (int k=0; k<HEIGHT; k++){
-      for (int l=0; l<WIDTH; l++){
+    for (int k=0; k<DEFAULT_HEIGHT; k++){
+      for (int l=0; l<DEFAULT_WIDTH; l++){
         (*outPtr)[0][k][l][j] = (*inPtr)[0][j][k][l];
       }
     }
@@ -27,7 +25,7 @@ void transpose(float* &in, float* &out) {
 
 
 /// \returns the index of the element at x,y,z,w.
-size_t getXYZW(const int64_t* dims, size_t x, size_t y, size_t z, size_t w) {
+size_t getXYZW(const size_t *dims, size_t x, size_t y, size_t z, size_t w) {
   return (x * dims[1] * dims[2] * dims[3]) + (y * dims[2] * dims[3]) +
          (z * dims[3]) + w;
 }
@@ -154,16 +152,12 @@ bool readPngImage(const char *filename, std::pair<float, float> range,
 }
 
 //#define NHWC 0
-//#define RANGE 255.0
-#define RANGE 1.0
+#define RANGE 255.0
 
 /// Loads and normalizes all PNGs into a tensor memory block \p resultT in the
 /// NCHW 3x224x224 format.
-static void loadImagesAndPreprocess(const char* filename, float* resultT, int64_t* shape) {
-  HEIGHT = shape[2];
-  WIDTH = shape[3];
-
-//static void loadImagesAndPreprocess(char*filename, float *resultT) {
+//static void loadImagesAndPreprocess(const char* filename, float *&resultT, size_t *resultDims) {
+static void loadImagesAndPreprocess(char*filename, float *resultT) {
   //  assert(filenames.size() > 0 &&
   //         "There must be at least one filename in filenames");
 
@@ -194,29 +188,29 @@ static void loadImagesAndPreprocess(const char* filename, float* resultT, int64_
   assert(loadSuccess && "Error reading input image.");
   (void)loadSuccess;
 
-  assert((dims[0] == HEIGHT && dims[1] == WIDTH) &&
+  assert((dims[0] == DEFAULT_HEIGHT && dims[1] == DEFAULT_WIDTH) &&
          "All images must have the same Height and Width");
 
   // Convert to BGR, as this is what NN is expecting.
   for (unsigned z = 0; z < 3; z++) {
     for (unsigned y = 0; y < dims[1]; y++) {
       for (unsigned x = 0; x < dims[0]; x++) {
-        resultT[getXYZW(shape, 0, 2-z, x, y)] =
+        resultT[getXYZ(dims, x, y, z)] =
             imageT[getXYZ(dims, x, y, z)];
       }
     }
   }
   //  }
   //  printf("Loaded images size in bytes is: %lu\n", resultSizeInBytes);
-
-//  if(NHWC == 1) {
-//    size_t bytes = sizeof(float[1][DEFAULT_HEIGHT][DEFAULT_WIDTH][3]);
-//    float* tmp = (float *)malloc(bytes);
-//    memset(tmp, 0, bytes);
-//    transpose(resultT, tmp);
-//    memcpy(resultT, tmp, bytes);
-//    free(tmp);
-//  }
+  //
+  //  if(NHWC == 1) {
+  //    size_t bytes = sizeof(float[1][DEFAULT_HEIGHT][DEFAULT_WIDTH][3]);
+  //    float* tmp = (float *)malloc(bytes);
+  //    memset(tmp, 0, bytes);
+  //    transpose(resultT, tmp);
+  //    memcpy(resultT, tmp, bytes);
+  //    free(tmp);
+  //  }
 
 }
 

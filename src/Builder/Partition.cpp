@@ -2,6 +2,7 @@
 // Created by msyu on 24. 3. 4.
 //
 
+#include "config.h"
 #include "Partition.hpp"
 #include <iostream>
 #include <yaml-cpp/yaml.h>
@@ -195,11 +196,8 @@ void Partition::genUserMainFile(std::vector<std::string>& funcNameList, std::vec
     //read main.cpp, input.h, CMakeLists.txt from /home/msyu/CLionProjects/onnx-mlir-pt/src/templates/
     std::cout << "== getUserMainFile == " << std::endl;
 
-    std::string rootDir;// = getenv("ONNX_MLIR_ROOT");
-    std::string runtimeDir;// = getenv("ONNX_MLIR_RUNTIME_DIR");
-
-    std::cout << "rootDir = " << rootDir << std::endl;
-    std::cout << "runtimeDir = " << runtimeDir << std::endl;
+//    std::string rootDir;// = getenv("ONNX_MLIR_ROOT");
+//    std::cout << "rootDir = " << rootDir << std::endl;
 
     std::cout << "emitFolder = " << emitFolder_ << std::endl;
     if(emitFolder_.empty()) {
@@ -207,16 +205,13 @@ void Partition::genUserMainFile(std::vector<std::string>& funcNameList, std::vec
       return;
     }
 
-    if(rootDir.empty()) {
-      rootDir = "/home/msyu/CLionProjects/onnx-mlir-part";
-      runtimeDir = "/home/msyu/CLionProjects/onnx-mlir-part/cmake-build-debug/Debug/lib";
-    }
-
-//    if(!rootDir.empty()) {
+//    std::cout << "SRC_DIR = " << SRC_DIR << std::endl;
+//    if(rootDir.empty()) {
+//      rootDir = "/home/msyu/CLionProjects/onnx-mlir-part";
+//    }
 
       std::string templateDir = "";
-//      std::string outDir = rootDir + "/cmake-build-debug/Debug/bin/";
-      templateDir = templateDir + rootDir + "/src/templates/";
+      templateDir = templateDir + SRC_DIR + "/src/templates/";
 
       if (!llvm::sys::fs::is_directory(emitFolder_)) {
         llvm::sys::fs::create_directory(emitFolder_);
@@ -292,8 +287,7 @@ void Partition::genUserMainFile(std::vector<std::string>& funcNameList, std::vec
 //          std::cout << line << std::endl;
           replaceWord(line, "#BIN_OBJ_NAMES#", cmakeBinObjListStr);
           replaceWord(line, "#EXE_NAME#", "partMlirExe" + std::to_string(randomNumber));
-//          replaceWord(line, "#ONNX_MLIR_RUNTIME_DIR#", runtimeDir);
-          replaceWord(line, "#MLIR_ROOT#", rootDir);
+          replaceWord(line, "#MLIR_ROOT#", SRC_DIR);
           newMakeFile << line << std::endl;
         }
         newMakeFile.close();
@@ -307,93 +301,6 @@ void Partition::genUserMainFile(std::vector<std::string>& funcNameList, std::vec
 //      return;
 //    }
 }
-//
-//void ConvertKrnlToLLVMPass::genUserMainFile(ModuleOp &module) {
-//
-//  //read main.cpp, input.h, CMakeLists.txt from /home/msyu/CLionProjects/onnx-mlir-pt/src/templates/
-//  std::cout << "== getUserMainFile == " << std::endl;
-//  //  const char* rootDir = getenv("ONNX_MLIR_ROOT");
-//  //  std::string runtimeDir = getenv("ONNX_MLIR_RUNTIME_DIR");
-//  const char* rootDir = "/home/msyu/CLionProjects/onnx-mlir-pt";
-//  std::string runtimeDir = "/home/msyu/CLionProjects/onnx-mlir-pt/cmake-build-release/Release/lib";
-//
-//  std::cout << "rootDir = " << rootDir << std::endl;
-//  std::cout << runtimeDir << std::endl;
-//  std::cout << "emitFolder = " << emitFolder_ << std::endl;
-//
-//  if(emitFolder_.empty()) {
-//    std::cerr << "no emit-folder name" << std::endl;
-//    return;
-//  }
-//  //
-//  //    std::cout << "ONNX_MLIR_ROOT = " << rootDir << std::endl;
-//
-//  if(rootDir != nullptr) {
-//    std::string templateDir = "";
-//    std::string outDir = emitFolder_ + "/";
-//    templateDir = templateDir + rootDir + "/src/templates/";
-//
-//    if (!llvm::sys::fs::is_directory(emitFolder_)) {
-//      llvm::sys::fs::create_directory(emitFolder_);
-//    }
-//
-//    std::cout << "dynEntryPointName = " << dynEntryPointName << std::endl;
-//    //    std::cout << "inOutDims size = " << inOutDims_.size()<< std::endl;
-//    std::cout << "inOutDims[0] " << inOutDims_.at(0).first << ", " << inOutDims_.at(0).second << std::endl;
-//    std::cout << "inOutDims[1] " << inOutDims_.at(1).first << ", " << inOutDims_.at(1).second << std::endl;
-//
-//    std::ifstream mainFile(templateDir + "main.cpp");
-//    std::ifstream makeFile(templateDir + "CMakeLists.txt");
-//
-//    llvm::sys::fs::copy_file(templateDir + "input.h", outDir + "input.h");
-//    llvm::sys::fs::copy_file(templateDir + "test.png", outDir + "test.png");
-//    llvm::sys::fs::copy_file(outputNameNoExt + ".o", outDir + outputNameNoExt + ".o");
-//
-//    if (mainFile.is_open()) {
-//
-//      std::ofstream newMainFile(outDir  + "main.cpp");
-//
-//      std::string line;
-//      while (std::getline(mainFile, line)) {
-//        //std::cout << line << std::endl;
-//        replaceWord(line, std::string("#RANK#"), std::to_string(inOutDims_.at(0).first));
-//        replaceWord(line, "#DIM_SHAPE#", inOutDims_.at(0).second);
-//        replaceWord(line, "#ENTRY_NAME#", dynEntryPointName);
-//        newMainFile << line << std::endl;
-//      }
-//
-//      newMainFile.close();
-//      mainFile.close();
-//    } else {
-//      std::cerr << "no main.cpp" << std::endl;
-//      return;
-//    }
-//
-//    if (makeFile.is_open()) {
-//
-//      std::ofstream newMakeFile(outDir + "CMakeLists.txt");
-//      std::string line;
-//      while (std::getline(makeFile, line)) {
-//        //std::cout << line << std::endl;
-//        replaceWord(line, "#OBJ_NAME#", outputNameNoExt);
-//        replaceWord(line, "#EXE_NAME#", outputNameNoExt + "Exe");
-//        replaceWord(line, "#ONNX_MLIR_RUNTIME_DIR#", runtimeDir);
-//        replaceWord(line, "#ONNX_MLIR_ROOT#", rootDir);
-//
-//        newMakeFile << line << std::endl;
-//      }
-//
-//      newMakeFile.close();
-//      makeFile.close();
-//    } else {
-//      std::cerr << "no CMakeLists.txt" << std::endl;
-//      return;
-//    }
-//
-//  } else {
-//    return;
-//  }
-//}
 
 
 }
