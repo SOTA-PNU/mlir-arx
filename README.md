@@ -106,6 +106,11 @@ For example, use the following command to lower an ONNX model (e.g., add.onnx) t
 ```shell
 ./onnx-mlir-part -O3 -EmitObj -o outputName -emit-folder=outdir -device-cfg=DeviceConfig.yaml -partition-plan=PartitionPlan.yaml add.onnx
 ```
+To generate an initial PartitionPlan of an input ONNX file, 
+```shell
+./onnx-mlir-part add.onnx
+```
+
 Examples of DeviceConfig.yaml and PartitionPlan.yaml are found [here](examples/partition/DeviceConfig.yaml) and [here](examples/partition/PartitionPlan.yaml).
 
 

@@ -1667,6 +1667,10 @@ void generateDefaultPartitionPlan(const onnx::ModelProto &originalModel) {
   std::string nodeNames = "";
   for(int i = 0; i < originalModel.graph().node_size(); i++) {
     auto snode = originalModel.graph().node(i);
+    std::string name = snode.name();
+    name.erase(std::remove(name.begin(), name.end(), ':'), name.end());
+    snode.set_name(name);
+
 //    std::cout << "node name: " << snode.name() << std::endl;
     nodeNames = nodeNames + "\n    :" + snode.name() + "-p0";
   }
