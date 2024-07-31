@@ -32,3 +32,10 @@ add_onnx_mlir_executable(onnx-mlir-part
   OMCompilerUtils
 #        yaml-cpp
 )
+
+# CMAKE_SOURCE_DIR 값을 정의한 파일을 생성
+configure_file(
+        ${CMAKE_SOURCE_DIR}/src/Builder/config.h.in
+        ${CMAKE_BINARY_DIR}/config.h
+        @ONLY
+)
