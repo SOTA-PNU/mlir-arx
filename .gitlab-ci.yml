@@ -71,9 +71,6 @@ docker-build-mlir:
     - etri-compute
   rules:
     - if: $CI_COMMIT_REF_PROTECTED == "true"
-      changes:
-        - docker/Dockerfile.onnx-mlir-part
-        - .gitlab-ci.yml
 
 docker-build-mlir-no-push:
   stage: docker-build-mlir
@@ -89,3 +86,5 @@ docker-build-mlir-no-push:
       --no-push
   tags:
     - etri-compute
+  rules:
+    - if: $CI_COMMIT_REF_PROTECTED == "false"
