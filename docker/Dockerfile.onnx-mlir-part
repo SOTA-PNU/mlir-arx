@@ -38,6 +38,7 @@ RUN LLVM_PROJECT_ROOT=${WORK_DIR}/llvm-project \
        cmake -G Ninja \
              -DCMAKE_CXX_COMPILER=/usr/bin/c++ \
              -DMLIR_DIR=${MLIR_DIR} \
+             -Wno-deprecated-declarations \
              .. \
     && cmake --build . \
     && cmake --build . --target check-onnx-lit \
