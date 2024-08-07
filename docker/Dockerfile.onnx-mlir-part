@@ -35,12 +35,13 @@ RUN LLVM_PROJECT_ROOT=${WORK_DIR}/llvm-project \
 # (dependent libzdnn is built on s390x only)
     && CC=clang CXX=clang++ \
     && MLIR_DIR=${LLVM_PROJECT_ROOT}/build/lib/cmake/mlir LIT_OPTS=-v \
-       cmake -w -G Ninja \
+       cmake -G Ninja \
              -DCMAKE_CXX_COMPILER=/usr/bin/c++ \
+             -DCMAKE_CXX_FLAGS="-w" \
              -DMLIR_DIR=${MLIR_DIR} \
              .. \
-    && cmake -w --build . \
-    && cmake -w --build . --target check-onnx-lit \
+    && cmake --build . \
+    && cmake --build . --target check-onnx-lit \
     && rm -rf /tmp/*
 
 # Copy from onnx-mlir-test to squash removed source layer and
