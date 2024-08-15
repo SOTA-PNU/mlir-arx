@@ -27,6 +27,7 @@ docker-build-llvm:
       --destination "onesai1/onnx-mlir-llvm:${CI_COMMIT_REF_NAME}"
       --destination "onesai1/onnx-mlir-llvm:latest"
       --build-arg "NPROC=40"
+      --build-arg "LLVM_PROJECT_SHA1=b2cdf3cc4c08729d0ff582d55e40793a20bbcdcc"
   tags:
     - etri-compute
   rules:
@@ -44,6 +45,7 @@ docker-build-llvm-no-push:
       --context "${CI_PROJECT_DIR}"
       --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.llvm-project"
       --build-arg "NPROC=40"
+      --build-arg "LLVM_PROJECT_SHA1=b2cdf3cc4c08729d0ff582d55e40793a20bbcdcc"
       --no-push
   tags:
     - etri-compute
