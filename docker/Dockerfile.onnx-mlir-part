@@ -15,7 +15,7 @@ COPY . onnx-mlir
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y --no-install-recommends python3-pybind11
+RUN apt-get update && apt-get install -y --no-install-recommends python3-pybind11 libyaml-cpp-dev
 
 # Setup onnx
 RUN ONNX_ROOT=${WORK_DIR}/onnx-mlir/third_party/onnx \
