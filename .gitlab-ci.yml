@@ -31,30 +31,30 @@ docker-build-llvm:
   tags:
     - etri-compute
   rules:
-    - if: $CI_COMMIT_REF_PROTECTED == "true"
-      changes:
-        - docker/Dockerfile.llvm-project
-        - .gitlab-ci.yml
-
-docker-build-llvm-no-push:
-  stage: docker-build-llvm
-  image:
-    name: gcr.io/kaniko-project/executor:debug
-    entrypoint: [""]
-  script:
-    - /kaniko/executor
-      --context "${CI_PROJECT_DIR}"
-      --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.llvm-project"
-      --build-arg "NPROC=40"
-      --build-arg "LLVM_PROJECT_SHA1=b2cdf3cc4c08729d0ff582d55e40793a20bbcdcc"
-      --no-push
-  tags:
-    - etri-compute
-  rules:
     - if: $CI_COMMIT_REF_PROTECTED == "false"
       changes:
         - docker/Dockerfile.llvm-project
         - .gitlab-ci.yml
+
+# docker-build-llvm-no-push:
+#   stage: docker-build-llvm
+#   image:
+#     name: gcr.io/kaniko-project/executor:debug
+#     entrypoint: [""]
+#   script:
+#     - /kaniko/executor
+#       --context "${CI_PROJECT_DIR}"
+#       --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.llvm-project"
+#       --build-arg "NPROC=40"
+#       --build-arg "LLVM_PROJECT_SHA1=b2cdf3cc4c08729d0ff582d55e40793a20bbcdcc"
+#       --no-push
+#   tags:
+#     - etri-compute
+#   rules:
+#     - if: $CI_COMMIT_REF_PROTECTED == "false"
+#       changes:
+#         - docker/Dockerfile.llvm-project
+#         - .gitlab-ci.yml
 
 docker-build-mlir:
   stage: docker-build-mlir
