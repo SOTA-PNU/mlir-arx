@@ -163,7 +163,7 @@ int testUseOfOnnxModelTypes() {
 
   auto *x = graph->add_input();
   x->set_name("x");
-  auto *x_type =sub
+  auto *x_type = x->mutable_type()->mutable_tensor_type();
   x_type->set_elem_type(float_type);
   auto *x_shape = x_type->mutable_shape();
   x_shape->add_dim()->set_dim_value(10);
