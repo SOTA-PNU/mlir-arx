@@ -2,9 +2,8 @@ add_custom_command(
 		OUTPUT
 		${CMAKE_CURRENT_BINARY_DIR}/mnistO3.o
 
-		COMMAND ${CMAKE_COMMAND} -E copy
-		${CMAKE_CURRENT_SOURCE_DIR}/mnistO3.o
-		${CMAKE_CURRENT_BINARY_DIR}/mnistO3.o
+		COMMAND
+		onnx-mlir -O3 -EmitObj -o mnistO3 	${CMAKE_SOURCE_DIR}/ai-models/mnist.onnx
 )
 
 add_custom_target(mnistNet DEPENDS
