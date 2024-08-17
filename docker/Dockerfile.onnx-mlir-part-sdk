@@ -10,8 +10,7 @@ LABEL onnx_mlir_pr_number2=${ONNX_MLIR_PR_NUMBER2}
 ARG WORK_DIR=/workdir
 WORKDIR ${WORK_DIR}
 
-# Copy onnx-mlir from the pull request
-COPY . onnx-mlir
+COPY third_party/onnx /tmp
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -21,5 +20,4 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
     unzip awscliv2.zip && ./aws/install && rm awscliv2.zip
 
 # Setup onnx
-RUN ONNX_ROOT=${WORK_DIR}/onnx-mlir/third_party/onnx \
-    && cd ${ONNX_ROOT} && python3 -m pip install .
+RUN /tmp/onnx && python3 -m pip install .

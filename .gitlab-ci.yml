@@ -73,7 +73,7 @@ docker-build-mlir-sdk:
   tags:
     - etri-compute
   rules:
-    - if: $CI_COMMIT_REF_PROTECTED == "true"
+    - if: $CI_COMMIT_REF_PROTECTED == "false"
       changes:
         - docker/Dockerfile.onnx-mlir-part-sdk
 
@@ -92,7 +92,7 @@ docker-build-mlir-sdk-no-push:
   tags:
     - etri-compute
   rules:
-    - if: $CI_COMMIT_REF_PROTECTED == "false"
+    - if: $CI_COMMIT_REF_PROTECTED == "true"
       changes:
         - docker/Dockerfile.onnx-mlir-part-sdk
 
@@ -108,7 +108,6 @@ build:
     ACCEL: NNPA
     WORK_DIR: /workdir
     LLVM_PROJECT_ROOT: ${WORK_DIR}/llvm-project
-    ONNX_MLIR_ROOT: ${WORK_DIR}/onnx-mlir
     CC: clang
     CXX: clang++
   before_script:
@@ -116,8 +115,7 @@ build:
   #   - aws configure set aws_secret_access_key ${MINIO_SECRET_KEY}
   #   - aws configure set default.region us-east-1
     - aws configure set default.s3.signature_version s3v4
-    - pwd
-    - cd ${ONNX_MLIR_ROOT} && rm -rf build && mkdir -p build && cd build
+    - mkdir -p build && cd build
     - pwd
     - ls -l
     - ls -l ../
