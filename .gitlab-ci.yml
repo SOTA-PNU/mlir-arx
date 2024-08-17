@@ -73,7 +73,7 @@ docker-build-mlir-sdk:
   tags:
     - etri-compute
   rules:
-    - if: $CI_COMMIT_REF_PROTECTED == "false"
+    - if: $CI_COMMIT_REF_PROTECTED == "true"
       changes:
         - docker/Dockerfile.onnx-mlir-part-sdk
 
@@ -92,7 +92,7 @@ docker-build-mlir-sdk-no-push:
   tags:
     - etri-compute
   rules:
-    - if: $CI_COMMIT_REF_PROTECTED == "true"
+    - if: $CI_COMMIT_REF_PROTECTED == "false"
       changes:
         - docker/Dockerfile.onnx-mlir-part-sdk
 
@@ -111,15 +111,10 @@ build:
     CC: clang
     CXX: clang++
   before_script:
-  #   - aws configure set aws_access_key_id ${MINIO_ACCESS_KEY}
-  #   - aws configure set aws_secret_access_key ${MINIO_SECRET_KEY}
-  #   - aws configure set default.region us-east-1
+    - pwd
     - aws configure set default.s3.signature_version s3v4
     - cd third_party/onnx && python3 -m pip install . && cd ../../
     - mkdir -p build && cd build
-    - pwd
-    - ls -l
-    - ls -l ../
   script:
     - MLIR_DIR=${LLVM_PROJECT_ROOT}/build/lib/cmake/mlir LIT_OPTS=-v cmake -G Ninja -DCMAKE_CXX_COMPILER=/usr/bin/c++ -DCMAKE_CXX_FLAGS="-w" -DMLIR_DIR=${MLIR_DIR} ..
     - cmake --build .
