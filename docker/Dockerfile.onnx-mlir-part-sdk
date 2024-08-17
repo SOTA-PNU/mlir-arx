@@ -1,12 +1,6 @@
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE} AS onnx-mlir-test
 
-# Label the base image so it can be cleaned up after becoming dangling
-ARG ONNX_MLIR_PR_NUMBER
-ARG ONNX_MLIR_PR_NUMBER2
-LABEL onnx_mlir_pr_number=${ONNX_MLIR_PR_NUMBER}
-LABEL onnx_mlir_pr_number2=${ONNX_MLIR_PR_NUMBER2}
-
 ARG WORK_DIR=/workdir
 WORKDIR ${WORK_DIR}
 
