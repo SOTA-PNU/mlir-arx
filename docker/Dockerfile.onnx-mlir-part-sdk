@@ -10,8 +10,6 @@ LABEL onnx_mlir_pr_number2=${ONNX_MLIR_PR_NUMBER2}
 ARG WORK_DIR=/workdir
 WORKDIR ${WORK_DIR}
 
-COPY third_party/onnx /tmp
-
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends python3-pybind11 libyaml-cpp-dev libpng-dev curl unzip
@@ -20,4 +18,6 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
     unzip awscliv2.zip && ./aws/install && rm awscliv2.zip
 
 # Setup onnx
-RUN /tmp/onnx && python3 -m pip install .
+
+COPY third_party/onnx onnx-mlir/third_party/onnx
+RUN onnx-mlir/third_party/onnx && python3 -m pip install .
