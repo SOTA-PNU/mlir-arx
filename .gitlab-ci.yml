@@ -100,17 +100,17 @@ build:
   stage: build
   image: onesai1/onnx-mlir-part-sdk:latest
   variables:
-    - AWS_ENDPOINT_URL: ${MINIO_SERVER_URL}
-    - AWS_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY}
-    - AWS_SECRET_ACCESS_KEY: ${MINIO_SECRET_KEY}
-    - AWS_DEFAULT_REGION: us-east-1
-    - NPROC: 40
-    - ACCEL: NNPA
-    - WORK_DIR: /workdir
-    - LLVM_PROJECT_ROOT: ${WORK_DIR}/llvm-project
-    - ONNX_MLIR_ROOT: ${WORK_DIR}/onnx-mlir
-    - CC: clang
-    - CXX: clang++
+    AWS_ENDPOINT_URL: ${MINIO_SERVER_URL}
+    AWS_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY}
+    AWS_SECRET_ACCESS_KEY: ${MINIO_SECRET_KEY}
+    AWS_DEFAULT_REGION: us-east-1
+    NPROC: 40
+    ACCEL: NNPA
+    WORK_DIR: /workdir
+    LLVM_PROJECT_ROOT: ${WORK_DIR}/llvm-project
+    ONNX_MLIR_ROOT: ${WORK_DIR}/onnx-mlir
+    CC: clang
+    CXX: clang++
   before_script:
   #   - aws configure set aws_access_key_id ${MINIO_ACCESS_KEY}
   #   - aws configure set aws_secret_access_key ${MINIO_SECRET_KEY}
