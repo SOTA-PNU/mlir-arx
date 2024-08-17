@@ -1,6 +1,7 @@
 stages:
   - docker-build-llvm
-  - docker-build-mlir
+  - docker-build-mlir-sdk
+  - build
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
@@ -31,33 +32,31 @@ docker-build-llvm:
   tags:
     - etri-compute
   rules:
+    - if: $CI_COMMIT_REF_PROTECTED == "true"
+      changes:
+        - docker/Dockerfile.llvm-project
+
+docker-build-llvm-no-push:
+  stage: docker-build-llvm
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  script:
+    - /kaniko/executor
+      --context "${CI_PROJECT_DIR}"
+      --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.llvm-project"
+      --build-arg "NPROC=40"
+      --build-arg "LLVM_PROJECT_SHA1=b2cdf3cc4c08729d0ff582d55e40793a20bbcdcc"
+      --no-push
+  tags:
+    - etri-compute
+  rules:
     - if: $CI_COMMIT_REF_PROTECTED == "false"
       changes:
         - docker/Dockerfile.llvm-project
-        - .gitlab-ci.yml
 
-# docker-build-llvm-no-push:
-#   stage: docker-build-llvm
-#   image:
-#     name: gcr.io/kaniko-project/executor:debug
-#     entrypoint: [""]
-#   script:
-#     - /kaniko/executor
-#       --context "${CI_PROJECT_DIR}"
-#       --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.llvm-project"
-#       --build-arg "NPROC=40"
-#       --build-arg "LLVM_PROJECT_SHA1=b2cdf3cc4c08729d0ff582d55e40793a20bbcdcc"
-#       --no-push
-#   tags:
-#     - etri-compute
-#   rules:
-#     - if: $CI_COMMIT_REF_PROTECTED == "false"
-#       changes:
-#         - docker/Dockerfile.llvm-project
-#         - .gitlab-ci.yml
-
-docker-build-mlir:
-  stage: docker-build-mlir
+docker-build-mlir-sdk:
+  stage: docker-build-mlir-sdk
   image:
     name: gcr.io/kaniko-project/executor:debug
     entrypoint: [""]
@@ -66,29 +65,63 @@ docker-build-mlir:
   script:
     - /kaniko/executor
       --context "${CI_PROJECT_DIR}"
-      --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.onnx-mlir-part"
-      --destination "onesai1/onnx-mlir-part:${CI_COMMIT_REF_NAME}"
-      --destination "onesai1/onnx-mlir-part:latest"
+      --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.onnx-mlir-part-sdk"
+      --destination "onesai1/onnx-mlir-part-sdk:${CI_COMMIT_REF_NAME}"
+      --destination "onesai1/onnx-mlir-part-sdk:latest"
       --build-arg "BASE_IMAGE=onesai1/onnx-mlir-llvm:latest"
       --build-arg "NPROC=40"
   tags:
     - etri-compute
   rules:
     - if: $CI_COMMIT_REF_PROTECTED == "true"
+      changes:
+        - docker/Dockerfile.onnx-mlir-part-sdk
 
-docker-build-mlir-no-push:
-  stage: docker-build-mlir
+docker-build-mlir-sdk-no-push:
+  stage: docker-build-mlir-sdk
   image:
     name: gcr.io/kaniko-project/executor:debug
     entrypoint: [""]
   script:
     - /kaniko/executor
       --context "${CI_PROJECT_DIR}"
-      --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.onnx-mlir-part"
+      --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.onnx-mlir-part-sdk"
       --build-arg "BASE_IMAGE=onesai1/onnx-mlir-llvm:latest"
       --build-arg "NPROC=40"
-      --no-push
+      --destination "onesai1/onnx-mlir-part-sdk:latest"
   tags:
     - etri-compute
   rules:
     - if: $CI_COMMIT_REF_PROTECTED == "false"
+      changes:
+        - docker/Dockerfile.onnx-mlir-part-sdk
+
+build:
+  stage: build
+  image: onesai1/onnx-mlir-part-sdk:latest
+  variables:
+    - AWS_ENDPOINT_URL: ${MINIO_SERVER_URL}
+    - AWS_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY}
+    - AWS_SECRET_ACCESS_KEY: ${MINIO_SECRET_KEY}
+    - AWS_DEFAULT_REGION: us-east-1
+    - NPROC: 40
+    - ACCEL: NNPA
+    - WORK_DIR: /workdir
+    - LLVM_PROJECT_ROOT: ${WORK_DIR}/llvm-project
+    - ONNX_MLIR_ROOT: ${WORK_DIR}/onnx-mlir
+    - CC: clang
+    - CXX: clang++
+  before_script:
+  #   - aws configure set aws_access_key_id ${MINIO_ACCESS_KEY}
+  #   - aws configure set aws_secret_access_key ${MINIO_SECRET_KEY}
+  #   - aws configure set default.region us-east-1
+    - aws configure set default.s3.signature_version s3v4
+    - cd ${ONNX_MLIR_ROOT} && rm -rf build && mkdir -p build && cd build
+  script:
+    - MLIR_DIR=${LLVM_PROJECT_ROOT}/build/lib/cmake/mlir LIT_OPTS=-v cmake -G Ninja \
+             -DCMAKE_CXX_COMPILER=/usr/bin/c++ \
+             -DCMAKE_CXX_FLAGS="-w" \
+             -DMLIR_DIR=${MLIR_DIR} \
+             .. \
+    - cmake --build .
+    - cmake --build . --target check-onnx-lit

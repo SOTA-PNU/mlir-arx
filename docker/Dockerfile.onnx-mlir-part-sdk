@@ -1,0 +1,25 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE} AS onnx-mlir-test
+
+# Label the base image so it can be cleaned up after becoming dangling
+ARG ONNX_MLIR_PR_NUMBER
+ARG ONNX_MLIR_PR_NUMBER2
+LABEL onnx_mlir_pr_number=${ONNX_MLIR_PR_NUMBER}
+LABEL onnx_mlir_pr_number2=${ONNX_MLIR_PR_NUMBER2}
+
+ARG WORK_DIR=/workdir
+WORKDIR ${WORK_DIR}
+
+# Copy onnx-mlir from the pull request
+COPY . onnx-mlir
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends python3-pybind11 libyaml-cpp-dev libpng-dev
+
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && ./aws/install && rm awscliv2.zip
+
+# Setup onnx
+RUN ONNX_ROOT=${WORK_DIR}/onnx-mlir/third_party/onnx \
+    && cd ${ONNX_ROOT} && python3 -m pip install .
