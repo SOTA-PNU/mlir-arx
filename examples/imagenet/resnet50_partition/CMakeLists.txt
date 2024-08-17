@@ -5,7 +5,7 @@ add_custom_command(OUTPUT
 		${CMAKE_CURRENT_BINARY_DIR}/ptout_imagenet/resnet50O3_p0.o
 		${CMAKE_CURRENT_BINARY_DIR}/ptout_imagenet/resnet50O3_p1.o
 		COMMAND
-        aws s3 cp s3://onnx-mlir-part/ai-models/resnet50.onnx ${CMAKE_SOURCE_DIR}/ai-models/resnet50.onnx --no-sign-request
+        aws s3 cp s3://onnx-mlir-part/ai-models/resnet50.onnx ${CMAKE_SOURCE_DIR}/ai-models/resnet50.onnx
 		COMMAND
 		onnx-mlir-part -O3 -EmitObj -o resnet50O3 -emit-folder=ptout_imagenet
 		-device-cfg=${CMAKE_SOURCE_DIR}/examples/partition/DeviceConfig.yaml
