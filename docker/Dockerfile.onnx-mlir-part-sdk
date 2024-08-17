@@ -15,9 +15,4 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends python3-pybind11 libyaml-cpp-dev libpng-dev curl unzip
 
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
-    unzip awscliv2.zip && ./aws/install && rm awscliv2.zip
-
-# Setup onnx
-
-COPY third_party/onnx onnx-mlir/third_party/onnx
-RUN onnx-mlir/third_party/onnx && python3 -m pip install .
+    unzip -qq awscliv2.zip && ./aws/install && rm awscliv2.zip

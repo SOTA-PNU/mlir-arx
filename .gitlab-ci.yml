@@ -115,6 +115,7 @@ build:
   #   - aws configure set aws_secret_access_key ${MINIO_SECRET_KEY}
   #   - aws configure set default.region us-east-1
     - aws configure set default.s3.signature_version s3v4
+    - cd third_party/onnx && python3 -m pip install . && cd ../../
     - mkdir -p build && cd build
     - pwd
     - ls -l
