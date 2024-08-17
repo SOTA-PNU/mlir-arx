@@ -95,6 +95,7 @@ docker-build-mlir-sdk-no-push:
     - if: $CI_COMMIT_REF_PROTECTED == "false"
       changes:
         - docker/Dockerfile.onnx-mlir-part-sdk
+        - .gitlab-ci.yml
 
 build:
   stage: build
