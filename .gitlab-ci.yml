@@ -82,22 +82,19 @@ docker-build-mlir-sdk-no-push:
   image:
     name: gcr.io/kaniko-project/executor:debug
     entrypoint: [""]
-  before_script:
-    - echo "{\"auths\":{\"${DOCKER_REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${DOCKER_USERNAME}" "${DOCKER_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
   script:
     - /kaniko/executor
       --context "${CI_PROJECT_DIR}"
       --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.onnx-mlir-part-sdk"
       --build-arg "BASE_IMAGE=onesai1/onnx-mlir-llvm:latest"
       --build-arg "NPROC=40"
-      --destination "onesai1/onnx-mlir-part-sdk:latest"
+      --no-push
   tags:
     - etri-compute
   rules:
     - if: $CI_COMMIT_REF_PROTECTED == "false"
       changes:
         - docker/Dockerfile.onnx-mlir-part-sdk
-        - .gitlab-ci.yml
 
 build:
   stage: build
@@ -128,3 +125,5 @@ build:
              .. \
     - cmake --build .
     - cmake --build . --target check-onnx-lit
+  tags:
+    - etri-compute
