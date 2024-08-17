@@ -119,10 +119,10 @@ build:
     - cd ${ONNX_MLIR_ROOT} && rm -rf build && mkdir -p build && cd build
   script:
     - MLIR_DIR=${LLVM_PROJECT_ROOT}/build/lib/cmake/mlir LIT_OPTS=-v cmake -G Ninja \
-             -DCMAKE_CXX_COMPILER=/usr/bin/c++ \
-             -DCMAKE_CXX_FLAGS="-w" \
-             -DMLIR_DIR=${MLIR_DIR} \
-             .. \
+                -DCMAKE_CXX_COMPILER=/usr/bin/c++ \
+                -DCMAKE_CXX_FLAGS="-w" \
+                -DMLIR_DIR=${MLIR_DIR} \
+                ..
     - cmake --build .
     - cmake --build . --target check-onnx-lit
   tags:
