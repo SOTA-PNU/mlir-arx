@@ -5,11 +5,12 @@ add_custom_command(OUTPUT
 		${CMAKE_CURRENT_BINARY_DIR}/ptout_detection/yolo3O3_p0.o
 		${CMAKE_CURRENT_BINARY_DIR}/ptout_detection/yolo3O3_p1.o
 		COMMAND
+        aws s3 cp s3://onnx-mlir-part/ai-models/yolov3_neubla_movingaverage.onnx ${CMAKE_SOURCE_DIR}/ai-models/yolov3_neubla_movingaverage.onnx
+		COMMAND
 		onnx-mlir-part -O3 -EmitObj -o yolo3O3 -emit-folder=ptout_detection
 		-device-cfg=${CMAKE_SOURCE_DIR}/examples/partition/DeviceConfig.yaml
 		-partition-plan=${CMAKE_CURRENT_SOURCE_DIR}/PartitionPlan.yaml
 		${CMAKE_SOURCE_DIR}/ai-models/yolov3_neubla_movingaverage.onnx
-
 )
 
 add_custom_target(yolo3O3PartExeNet DEPENDS
