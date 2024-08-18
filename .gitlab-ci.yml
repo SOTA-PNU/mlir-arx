@@ -75,6 +75,7 @@ build-sdk:
   rules:
     - if: $CI_COMMIT_REF_PROTECTED == "true"
       changes:
+        - docker/Dockerfile.llvm-project
         - docker/Dockerfile.onnx-mlir-part-sdk
 
 build-sdk-no-push:
@@ -94,6 +95,7 @@ build-sdk-no-push:
   rules:
     - if: $CI_COMMIT_REF_PROTECTED == "false"
       changes:
+        - docker/Dockerfile.llvm-project
         - docker/Dockerfile.onnx-mlir-part-sdk
 
 build:
