@@ -53,6 +53,42 @@ After installation, an `onnx-mlir-part` executable should appear in the `build/D
 [//]: # (If you have difficulties building, rebuilding, or testing `onnx-mlir-part`, check this [page]&#40;docs/TestingHighLevel.md&#41; for helpful hints.)
 
 
+## Using ONNX files in builds
+
+The ONNX files located in the `ai-models/` folder are used in the build of this project. Since the ONNX files are large and not subject to version control, they are served via AWS S3. Prepare the required AWS environment in advance for the build.
+
+- [Install or update to the latest version of the AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html).
+- [Configure AWS CLI](https://docs.aws.amazon.com/cli/latest/reference/configure/):
+  ```bash
+  $ aws configure
+  AWS Access Key ID [None]: <Enter your key ID>
+  AWS Secret Access Key [None]: <Enter your access key>
+  Default region name [None]: <Enter your default region (e.g., us-west-2)>
+  Default output format [None]: ENTER
+  ```
+
+- [Set endpoints if needed](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-endpoints.html).
+  (For the GitLab runner, we use the endpoint `http://storage.ones-ai.lab`.)
+
+For now, the following files should be in the S3 bucket named `onnx-mlir-part`.
+
+`onnx-mlir-part/ai-models/`:
+
+- resnet50.onnx
+- yolov3_neubla_movingaverage.onnx
+
+We have already uploaded those files for the endpoints used by the ONES-AI group runners. However, when building this project in your own environment, you will need to create your own bucket and upload the files yourself.
+
+To upload new files to the GitLab runner’s endpoint, follow these steps:
+
+1. Transfer the file to the `compute` server using either `scp` or `alpacon-cli`.
+2. Upload the file with the AWS CLI:
+    ```bash
+    aws s3 cp new-file.onnx s3://onnx-mlir-part/ai-models/
+    ```
+
+For more information about AWS S3, you can refer to [this documentation](https://docs.aws.amazon.com/AmazonS3/latest/userguide/GetStartedWithS3.html).
+
 ## Using ONNX-MLIR-PART
 
 The usage of `onnx-mlir-part` is as such:
