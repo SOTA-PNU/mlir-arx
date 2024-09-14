@@ -25,8 +25,8 @@ build-llvm:
     - /kaniko/executor
       --context "${CI_PROJECT_DIR}"
       --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.llvm-project"
-      --destination "onesai1/onnx-mlir-llvm:${CI_COMMIT_REF_NAME}"
-      --destination "onesai1/onnx-mlir-llvm:latest"
+      --destination "${DOCKER_USERNAME}/onnx-mlir-llvm:${CI_COMMIT_REF_NAME}"
+      --destination "${DOCKER_USERNAME}/onnx-mlir-llvm:latest"
       --build-arg "NPROC=40"
       --build-arg "LLVM_PROJECT_SHA1=b2cdf3cc4c08729d0ff582d55e40793a20bbcdcc"
   rules:
@@ -62,9 +62,9 @@ build-sdk:
     - /kaniko/executor
       --context "${CI_PROJECT_DIR}"
       --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.onnx-mlir-part-sdk"
-      --destination "onesai1/onnx-mlir-part-sdk:${CI_COMMIT_REF_NAME}"
-      --destination "onesai1/onnx-mlir-part-sdk:latest"
-      --build-arg "BASE_IMAGE=onesai1/onnx-mlir-llvm:latest"
+      --destination "${DOCKER_USERNAME}/onnx-mlir-part-sdk:${CI_COMMIT_REF_NAME}"
+      --destination "${DOCKER_USERNAME}/onnx-mlir-part-sdk:latest"
+      --build-arg "BASE_IMAGE=${DOCKER_USERNAME}/onnx-mlir-llvm:latest"
       --build-arg "NPROC=40"
   rules:
     - if: $CI_COMMIT_REF_PROTECTED == "true"
@@ -81,7 +81,7 @@ build-sdk-no-push:
     - /kaniko/executor
       --context "${CI_PROJECT_DIR}"
       --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile.onnx-mlir-part-sdk"
-      --build-arg "BASE_IMAGE=onesai1/onnx-mlir-llvm:latest"
+      --build-arg "BASE_IMAGE=${DOCKER_USERNAME}/onnx-mlir-llvm:latest"
       --build-arg "NPROC=40"
       --no-push
   rules:
@@ -92,7 +92,7 @@ build-sdk-no-push:
 
 build:
   stage: build
-  image: onesai1/onnx-mlir-part-sdk:latest
+  image: ${DOCKER_USERNAME}/onnx-mlir-part-sdk:latest
   variables:
     AWS_ENDPOINT_URL: ${MINIO_SERVER_URL}
     AWS_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY}
