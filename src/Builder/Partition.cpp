@@ -94,7 +94,6 @@ void Partition::loadPartitionPlan(std::string partitionPlan) {
           input = node["partitionNames"].as<std::string>();
           partitionPlanInfo_.partitionNames_ = splitString(input, delimiter);
 
-          int idx = 0;
           for(size_t idx = 0; idx < partitionPlanInfo_.partitionNames_.size(); idx++) {
             partitionPlanInfo_.partitionBackendMap_.insert({partitionPlanInfo_.partitionNames_[idx], bnames[idx]});
             partitionPlanInfo_.partitionEmitMap_.insert({partitionPlanInfo_.partitionNames_[idx], enames[idx]});

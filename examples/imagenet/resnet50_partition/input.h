@@ -25,7 +25,7 @@ void transpose(float* &in, float* &out) {
 
 
 /// \returns the index of the element at x,y,z,w.
-size_t getXYZW(const int64_t* dims, size_t x, size_t y, size_t z, size_t w) {
+size_t getXYZW(const size_t *dims, size_t x, size_t y, size_t z, size_t w) {
   return (x * dims[1] * dims[2] * dims[3]) + (y * dims[2] * dims[3]) +
          (z * dims[3]) + w;
 }
@@ -114,6 +114,7 @@ bool readPngImage(const char *filename, std::pair<float, float> range,
   imageDims[0] = width;
   imageDims[1] = height;
   imageDims[2] = numChannels;
+
   imageT = static_cast<float *>(
       calloc(1, width * height * numChannels * sizeof(float)));
 
@@ -129,11 +130,11 @@ bool readPngImage(const char *filename, std::pair<float, float> range,
         imageT[getXYZ(imageDims, row_n, col_n, 0)] =
             float(ptr[0]) * scale + bias;
       } else {
-        imageT[getXYZ(imageDims, row_n, col_n, 2)] =
+        imageT[getXYZ(imageDims, row_n, col_n, 0)] =
             float(ptr[0]) * scale + bias;
         imageT[getXYZ(imageDims, row_n, col_n, 1)] =
             float(ptr[1]) * scale + bias;
-        imageT[getXYZ(imageDims, row_n, col_n, 0)] =
+        imageT[getXYZ(imageDims, row_n, col_n, 2)] =
             float(ptr[2]) * scale + bias;
 
       }
@@ -152,13 +153,12 @@ bool readPngImage(const char *filename, std::pair<float, float> range,
 }
 
 //#define NHWC 0
-//#define RANGE 255.0
-#define RANGE 1.0
+#define RANGE 255.0
 
 /// Loads and normalizes all PNGs into a tensor memory block \p resultT in the
 /// NCHW 3x224x224 format.
-static void loadImagesAndPreprocess(const char* filename, float* resultT, int64_t* shape) {
-  //static void loadImagesAndPreprocess(char*filename, float *resultT) {
+//static void loadImagesAndPreprocess(const char* filename, float *&resultT, size_t *resultDims) {
+static void loadImagesAndPreprocess(char*filename, float *resultT) {
   //  assert(filenames.size() > 0 &&
   //         "There must be at least one filename in filenames");
 
@@ -167,51 +167,51 @@ static void loadImagesAndPreprocess(const char* filename, float* resultT, int64_
   //for mxnet_exported_resnet18.onnx
   std::pair<float, float> range = std::make_pair(0., RANGE);
 
-  //  size_t resultDims[4];
+//  size_t resultDims[4];
   unsigned numImages = 1;
   //  unsigned numImages = filenames.size();
   // N x C x H x W
   //  resultDims[0] = numImages;
-  //  resultDims[0] = numImages;
-  //  resultDims[3] = 3;
-  //  resultDims[1] = DEFAULT_HEIGHT;
-  //  resultDims[2] = DEFAULT_WIDTH;
-  //  size_t resultSizeInBytes =
-  //      numImages * 3 * DEFAULT_HEIGHT * DEFAULT_WIDTH * sizeof(float);
-  //  resultT = static_cast<float *>(malloc(resultSizeInBytes));
+//  resultDims[0] = numImages;
+//  resultDims[3] = 3;
+//  resultDims[1] = DEFAULT_HEIGHT;
+//  resultDims[2] = DEFAULT_WIDTH;
+//  size_t resultSizeInBytes =
+//      numImages * 3 * DEFAULT_HEIGHT * DEFAULT_WIDTH * sizeof(float);
+//  resultT = static_cast<float *>(malloc(resultSizeInBytes));
   // We iterate over all the png files, reading them all into our result tensor
   // for processing
-  //  for (unsigned n = 0; n < numImages; n++) {
-  float *imageT{nullptr};
-  size_t dims[3];
-  //    bool loadSuccess = !readPngImage(filenames[n].c_str(), range, imageT, dims);
-  bool loadSuccess = !readPngImage(filename, range, imageT, dims);
-  assert(loadSuccess && "Error reading input image.");
-  (void)loadSuccess;
+//  for (unsigned n = 0; n < numImages; n++) {
+    float *imageT{nullptr};
+    size_t dims[3];
+    //    bool loadSuccess = !readPngImage(filenames[n].c_str(), range, imageT, dims);
+    bool loadSuccess = !readPngImage(filename, range, imageT, dims);
+    assert(loadSuccess && "Error reading input image.");
+    (void)loadSuccess;
 
-  assert((dims[0] == DEFAULT_HEIGHT && dims[1] == DEFAULT_WIDTH) &&
-         "All images must have the same Height and Width");
+    assert((dims[0] == DEFAULT_HEIGHT && dims[1] == DEFAULT_WIDTH) &&
+           "All images must have the same Height and Width");
 
-  // Convert to BGR, as this is what NN is expecting.
-  for (unsigned z = 0; z < 3; z++) {
-    for (unsigned y = 0; y < dims[1]; y++) {
-      for (unsigned x = 0; x < dims[0]; x++) {
-        resultT[getXYZW(shape, 0, 2-z, x, y)] =
-            imageT[getXYZ(dims, x, y, z)];
+    // Convert to BGR, as this is what NN is expecting.
+    for (unsigned z = 0; z < 3; z++) {
+      for (unsigned y = 0; y < dims[1]; y++) {
+        for (unsigned x = 0; x < dims[0]; x++) {
+          resultT[getXYZ(dims, x, y, z)] =
+              imageT[getXYZ(dims, x, y, z)];
+        }
       }
     }
-  }
-  //  }
-  //  printf("Loaded images size in bytes is: %lu\n", resultSizeInBytes);
-
-  //  if(NHWC == 1) {
-  //    size_t bytes = sizeof(float[1][DEFAULT_HEIGHT][DEFAULT_WIDTH][3]);
-  //    float* tmp = (float *)malloc(bytes);
-  //    memset(tmp, 0, bytes);
-  //    transpose(resultT, tmp);
-  //    memcpy(resultT, tmp, bytes);
-  //    free(tmp);
-  //  }
+//  }
+//  printf("Loaded images size in bytes is: %lu\n", resultSizeInBytes);
+//
+//  if(NHWC == 1) {
+//    size_t bytes = sizeof(float[1][DEFAULT_HEIGHT][DEFAULT_WIDTH][3]);
+//    float* tmp = (float *)malloc(bytes);
+//    memset(tmp, 0, bytes);
+//    transpose(resultT, tmp);
+//    memcpy(resultT, tmp, bytes);
+//    free(tmp);
+//  }
 
 }
 

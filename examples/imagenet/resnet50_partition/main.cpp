@@ -19,9 +19,8 @@ int main(int argc, char **argv) {
   int64_t rank = 4;
   int64_t shape[] = {1 , 3, 224 , 224 };
 
-  static float img_data[3*224*224];
-  loadImagesAndPreprocess(argv[1], img_data, shape);
-
+    static float img_data[3*224*224];
+    loadImagesAndPreprocess(argv[1], img_data);
 
   // Create a tensor using omTensorCreateWithOwnership (returns a pointer to the OMTensor).
   // When the parameter, owning is set to "true", the OMTensor will free the data

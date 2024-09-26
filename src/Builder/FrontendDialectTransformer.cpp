@@ -156,7 +156,7 @@ class FrontendGenImpl {
 public:
   explicit FrontendGenImpl(MLIRContext &context)
       : context_(context), builder_(&context) {
-    std::cout << " [FrontendGenImpl] module created" << std::endl;
+//    std::cout << " [FrontendGenImpl] module created" << std::endl;
     module_ = ModuleOp::create(UnknownLoc::get(&context));
     InitHandlerMap();
   }
@@ -176,11 +176,33 @@ public:
              "value can be used to have a rough idea of the number of "
              "parameters in the model.\n";
     }
-//    std::cout << "[ImportONNXModel]" << model.graph().name().data() << std::endl;
+//    std::cout << "[ImportONNXModel 1]" << model.graph().name().data() << std::endl;
 //    std::cout << "model function size = " << model.functions_size() << std::endl;
 
     return module_;
   }
+
+void ImportONNXModel(
+        const onnx::ModelProto &model, ImportOptions options, OwningOpRef<ModuleOp> &module) {
+    options_ = options;
+    modelInputShaper_.setShapeInformation(options_.shapeInformation);
+    opset_map_ = GetOpsetImportsFromProto(model); // Which opsets to use.
+    in_model_functions_ = GetModelLocalFunctions(model);
+    importGraph(model.graph());
+    if (options_.verboseOutput) {
+        llvm::outs()
+                << "The ONNX model has " << num_of_parameters_
+                << " elements in its initializers. This value would be close to and "
+                   "greater than the number of parameters in the model. Because "
+                   "there is no way to exactly count the number of parameters, this "
+                   "value can be used to have a rough idea of the number of "
+                   "parameters in the model.\n";
+    }
+//    std::cout << "[ImportONNXModel 2]" << model.graph().name().data() << std::endl;
+//    std::cout << "model function size = " << model.functions_size() << std::endl;
+
+    module = module_;
+}
 
   ModuleOp ImportONNXModel(
       const onnx::ModelProto &model, ImportOptions options, std::string graphName) {
@@ -375,7 +397,7 @@ private:
   }
 
   OptType ImportOptionalType(const onnx::TypeProto &type_proto) {
-    std::cout << "== [ImportOptionalType] ==" << std::endl;
+//    std::cout << "== [ImportOptionalType] ==" << std::endl;
     auto input_opt_type = type_proto.optional_type();
     if (input_opt_type.has_elem_type()) {
       onnx::TypeProto elem_type = input_opt_type.elem_type();
@@ -511,7 +533,7 @@ private:
     std::unordered_set<std::string> initializerNames;
     for (const auto &initializer : graph.initializer()) {
       if(initializerNames.find(initializer.name()) != initializerNames.end()) {
-        std::cout << "Existing initializer." << initializer.name() << std::endl;
+//        std::cout << "Existing initializer." << initializer.name() << std::endl;
         continue;
       }
       BindOnnxName(initializer.name(), ImportTensor(initializer));
@@ -558,6 +580,7 @@ private:
     // exhaustive correctness checking of its own
     for (const auto &internal : graph.value_info()) {
       AddValueInfo(internal, true);
+//        std::cout << "0. internal name: " << internal.name() << std::endl;
     }
 
     for (const auto &output : graph.output()) {
@@ -1558,7 +1581,9 @@ private:
 
 bool ImportFrontendModelInternal(onnx::ModelProto &model, MLIRContext &context,
     OwningOpRef<ModuleOp> &module, ImportOptions options) {
-  int originVersion = CURRENT_ONNX_OPSET;
+    llvm::outs() << "[ImportFrontendModelInternal]\n";
+
+    int originVersion = CURRENT_ONNX_OPSET;
   // Get the version of the model
   // Code copied from onnx/onnx/version_coverter/convert.cc
   for (auto it = model.opset_import().begin(); it != model.opset_import().end();
@@ -1603,50 +1628,81 @@ bool ImportFrontendModelInternal(onnx::ModelProto &model, MLIRContext &context,
   return true;
 }
 
-
-void extractWeightsForNode(const onnx::ModelProto& originalModel, const std::string& nodeName, onnx::ModelProto& newModel) {
-  for (const auto& node : originalModel.graph().node()) {
-    if (node.name() == nodeName) {
-      for (const auto& input : node.input()) {
-        for (const auto& tensor : originalModel.graph().initializer()) {
-          if (tensor.name() == input) {
-            auto* newTensor = newModel.mutable_graph()->add_initializer();
-            newTensor->CopyFrom(tensor);
-          }
+onnx::TensorProto* getInitalizer(onnx::ModelProto& model, std::string name) {
+    for(auto& tensor : *model.mutable_graph()->mutable_initializer()) {
+        if(tensor.name() == name) {
+            return &tensor;
         }
-      }
-      break;
     }
-  }
+    return nullptr;
 }
 
-//std::vector<const onnx::NodeProto*> findPrevNodes(const onnx::GraphProto& graph, onnx::NodeProto& targetNode) {
-//  std::vector<const onnx::NodeProto*> previousNodes;
-//  for (const auto& targetInput : targetNode.input()) {
-//    for (const auto& node : graph.node()) {
-//      for (const auto& output : node.output()) {
-//        if (output == targetInput) {
-//          previousNodes.push_back(&node);
-//        }
-//      }
-//    }
-//  }
-//  return previousNodes;
-//}
-//
-//std::vector<const onnx::NodeProto*> findNextNodes(const onnx::GraphProto& graph, onnx::NodeProto& node) {
-//  std::vector<const onnx::NodeProto*> nextNodes;
-//  for (const auto& output : node.output()) {
-//    for (const auto& otherNode : graph.node()) {
-//      for (const auto& input : otherNode.input()) {
-//        if (input == output) {
-//          nextNodes.push_back(&otherNode);
-//        }
-//      }
-//    }
-//  }
-//  return nextNodes;
-//}
+const onnx::ValueInfoProto* getValueinfo(onnx::ModelProto& model, std::string name) {
+    for(auto& vinfo : model.mutable_graph()->value_info()) {
+        if(vinfo.name() == name) {
+            return &vinfo;
+        }
+    }
+    return nullptr;
+}
+
+
+void copyNodeTensor(const onnx::ModelProto& sourceModel, onnx::ModelProto& targetModel) {
+    for (auto& tnode : *targetModel.mutable_graph()->mutable_node()) {
+      for (auto &input: tnode.input()) {
+//          std::cout << "input = " << input << std::endl;
+          for (auto &tensor: sourceModel.graph().initializer()) {
+              if (tensor.name() == input) {
+                  auto *tarTensor = getInitalizer(targetModel, input);
+                  if (tarTensor == nullptr) {
+                      auto *newTensor = targetModel.mutable_graph()->add_initializer();
+                      newTensor->CopyFrom(tensor);
+                  }
+                  break;
+              }
+          }
+
+          for (auto &value: sourceModel.graph().value_info()) {
+              if (value.name() == input) {
+                  auto *tarVinfo = getValueinfo(targetModel, input);
+                  if(tarVinfo == nullptr) {
+                      auto newVInfo = targetModel.mutable_graph()->add_value_info();
+                      newVInfo->CopyFrom(value);
+                  }
+                  break;
+              }
+          }
+      }
+  }
+
+    for (auto& tnode : *targetModel.mutable_graph()->mutable_node()) {
+      for (auto &output: tnode.output()) {
+          for (auto& tensor : sourceModel.graph().initializer()) {
+              if (tensor.name() == output) {
+                auto* tarTensor = getInitalizer(targetModel, output);
+                 if(tarTensor == nullptr) {
+                    auto* newTensor = targetModel.mutable_graph()->add_initializer();
+                    newTensor->CopyFrom(tensor);
+                 }
+                break;
+              }
+          }
+
+          for (auto& value : sourceModel.graph().value_info()) {
+              if (value.name() == output) {
+                  auto *tarVinfo = getValueinfo(targetModel, output);
+                  if(tarVinfo == nullptr) {
+                      auto newVInfo = targetModel.mutable_graph()->add_value_info();
+                      newVInfo->CopyFrom(value);
+                  }
+                  break;
+              }
+          }
+      }
+  }
+
+}
+
 
 void setDimByName(const std::string& name, const onnx::GraphProto& graph, onnx::ValueInfoProto* value) {
   auto *type_proto = value->mutable_type();
@@ -1672,7 +1728,11 @@ void generateDefaultPartitionPlan(const onnx::ModelProto &originalModel) {
     snode.set_name(name);
 
 //    std::cout << "node name: " << snode.name() << std::endl;
-    nodeNames = nodeNames + "\n    :" + snode.name() + "-p0";
+    std::string partition = "p0";
+//    if(snode.op_type().c_str()[0] != 'Q' && snode.name().find("quant") == std::string::npos)
+//        partition = "p1";
+
+    nodeNames = nodeNames + "\n    :" + snode.name() + "-" + partition;
   }
 
   std::ofstream planFile("PartitionPlan.yaml");
@@ -1848,6 +1908,8 @@ std::unique_ptr<onnx::ModelProto> makeSubgraph(size_t seq, std::string partition
       if(std::find(pNodeList.begin(), pNodeList.end(), snode.name()) != pNodeList.end()) {
         auto tnode = submodel->mutable_graph()->add_node();
         tnode->CopyFrom(snode);
+//        copyNodeInOut(originalModel, *(submodel.get()), tnode);
+
         for(auto gin:graphInputList) {
           for(auto sin: snode.input()) {
             if(!gin->name().compare(sin)) {
@@ -1867,66 +1929,145 @@ std::unique_ptr<onnx::ModelProto> makeSubgraph(size_t seq, std::string partition
 //    node에 연결된 이전 노드가 submodel 내에 없으면 input을 graph의 input으로 추가
     getPrevNode(&node, &tmpList, submodel.get());
     if(tmpList.empty()) {
-      inNodeList.push_back(node);
+        bool exist = false;
+        for(auto in: inNodeList) {
+            if(in.name() == node.name()) {
+                exist = true;
+                break;
+            }
+        }
+        if(!exist)
+            inNodeList.push_back(node);
     } else {
       tmpList.clear();
     }
 
     //node의 input이 다른 파티션에  포함된 노드의 출력이면 node는 현재 파티션의 입력 노드
     if(isInputInOtherPartition(&node, restNodeList)) {
-        inNodeList.push_back(node);
+        bool exist = false;
+        for(auto in: inNodeList) {
+            if(in.name() == node.name()) {
+                exist = true;
+                break;
+            }
+        }
+        if(!exist)
+            inNodeList.push_back(node);
     }
 
     //node에 연결된 다음 노드가 submodel 내에 없으면 output을 graph의 output으로 추가
     getNextNode(&node, &tmpList, submodel.get());
     if(tmpList.empty()) {
-      outNodeList.push_back(node);
+        bool exist = false;
+        for(auto out: outNodeList) {
+            if(out.name() == node.name()) {
+                exist = true;
+                break;
+            }
+        }
+        if(!exist)
+          outNodeList.push_back(node);
     } else {
       tmpList.clear();
     }
 
     //node의 output이 다른 파티션에  포함된 노드의 입력이면 node는 현재 파티션의 출력 노드
     if(isOutputInOtherPartition(&node, restNodeList)) {
-        outNodeList.push_back(node);
+        bool exist = false;
+        for(auto out: outNodeList) {
+            if(out.name() == node.name()) {
+                exist = true;
+                break;
+            }
+        }
+        if(!exist)
+            outNodeList.push_back(node);
     }
   }
 
   for(auto inNode: inNodeList) {
-    for(int i = 0; i < inNode.input_size(); i++) {
-
-      if(isInputExist(inNode.input(i), submodel.get()))
+//      std::cout << "in node name = " << inNode.name() << std::endl;
+//    for(int i = 0; i < inNode->input_size(); i++) {
+    for(auto input: inNode.input()) {
+//        std::cout << "input name = " << input << std::endl;
+      if(isInputExist(input, submodel.get()))
         continue;
 
-      if(!isOutputOfOtherPartition(inNode.input(i), restNodeList))
+      if(!isOutputOfOtherPartition(input, restNodeList))
         continue;
 
       onnx::ValueInfoProto* gin = submodel->mutable_graph()->add_input();
-      setDimByName(inNode.input(i), originalModel.graph(), gin);
-
+      setDimByName(input, originalModel.graph(), gin);
+//
       const onnx::ValueInfoProto *inputV =
-          getInputValueProto(inNode.input(i), originalModel);
+          getInputValueProto(input, originalModel);
       if(inputV != NULL) {
         gin->CopyFrom(*inputV);
       } else {
-        gin->set_name(inNode.input(i));
+          gin->set_name(input);
+//          std::cout << "gin name = " << gin->name() << std::endl;
+          std::string tmpName = gin->name();
+          size_t pos = tmpName.find("_quantized");
+          if (pos != std::string::npos) {
+              tmpName.erase(pos, std::string("_quantized").length());
+          }
+
+          for (auto &value: originalModel.graph().value_info()) {
+              if (value.name() == gin->name()) {
+                  auto* type = gin->mutable_type();
+                  type->CopyFrom(value.type());
+                  break;
+              } else if (value.name() == tmpName) {
+                  auto* type = gin->mutable_type();
+                  type->CopyFrom(value.type());
+                  type->mutable_tensor_type()->set_elem_type(onnx::TensorProto_DataType::TensorProto_DataType_UINT8);
+                  break;
+              }
+          }
       }
     }
   }
 
   for(auto outNode: outNodeList) {
-    for(int i = 0; i < outNode.output_size(); i++) {
+//      copyNodeInOut(originalModel, *(submodel.get()), &outNode);
+//      std::cout << "out node name = " << outNode.name() << std::endl;
+//    for(int i = 0; i < outNode.output_size(); i++) {
+    for(auto output: outNode.output()) {
+//        std::cout << "output name = " << output << std::endl;
 
-      if(isOutputExist(outNode.output(i), submodel.get()))
+      if(isOutputExist(output, submodel.get()))
         continue;
 
       auto *gout = submodel->mutable_graph()->add_output();
-      setDimByName(outNode.output(i), originalModel.graph(), gout);
+      setDimByName(output, originalModel.graph(), gout);
+
       const onnx::ValueInfoProto *outputV =
-          getOutputValueProto(outNode.output(i), originalModel);
+          getOutputValueProto(output, originalModel);
       if(outputV != NULL) {
         gout->CopyFrom(*outputV);
       } else {
-        gout->set_name(outNode.output(i));
+
+        gout->set_name(output);
+//        std::cout << "gout name = " << gout->name() << std::endl;
+
+        std::string tmpName = gout->name();
+        size_t pos = tmpName.find("_quantized");
+        if (pos != std::string::npos) {
+          tmpName.erase(pos, std::string("_quantized").length());
+        }
+
+         for (auto &value: originalModel.graph().value_info()) {
+              if (value.name() == gout->name()) {
+                  auto* type = gout->mutable_type();
+                  type->CopyFrom(value.type());
+                  break;
+              } else if (value.name() == tmpName) {
+                  auto* type = gout->mutable_type();
+                  type->CopyFrom(value.type());
+                  type->mutable_tensor_type()->set_elem_type(onnx::TensorProto_DataType::TensorProto_DataType_UINT8);
+                  break;
+              }
+          }
       }
     }
   }
@@ -1945,16 +2086,14 @@ std::unique_ptr<onnx::ModelProto> makeSubgraph(size_t seq, std::string partition
       }
   }
 
-  const auto& source_graph_initializers = originalModel.graph().initializer();
-  for(auto node: submodel->mutable_graph()->node()) {
-    extractWeightsForNode(originalModel, node.name(), *(submodel.get()));
-  }
+
+    copyNodeTensor(originalModel, *(submodel.get()));
 
   return std::move(submodel);
 }
 
 void partitionModel(const onnx::ModelProto &model, std::vector<std::pair<std::string, std::unique_ptr<onnx::ModelProto>>>& submodelList) {
-  std::cout << "*** [partitionModel] ***" << std::endl;
+//  std::cout << "*** [partitionModel] ***" << std::endl;
   //partition_
   auto partInfo = partition_->getPartitionPlanInfo();
 //  if(partInfo.partitionNames_.size() == 0) {
@@ -1989,7 +2128,7 @@ void partitionModel(const onnx::ModelProto &model, std::vector<std::pair<std::st
 
 void ImportFrontendModelWithPartition(const onnx::ModelProto &model, std::vector<mlir::MLIRContext*> &contextList,
     std::vector<OwningOpRef<ModuleOp>> &partModules, ImportOptions options) {
-  std::cout << std::endl << "=== [ImportFrontendModel start] ===" << std::endl;
+//  std::cout << std::endl << "=== [ImportFrontendModel start] ===" << std::endl;
 
   //=================
   const onnx::GraphProto& graph = model.graph();
@@ -2026,6 +2165,11 @@ void ImportFrontendModelWithPartition(const onnx::ModelProto &model, std::vector
     partModules.push_back(module);
 
   } else {
+
+    mlir::OwningOpRef<mlir::ModuleOp> module;
+    detail::FrontendGenImpl myONNXGen(*contextList.at(0));
+    myONNXGen.ImportONNXModel(model, options, module);
+
     std::vector<std::pair<std::string, std::unique_ptr<onnx::ModelProto>>> submodelList;
     partitionModel(model, submodelList);
 
@@ -2042,7 +2186,9 @@ void ImportFrontendModelWithPartition(const onnx::ModelProto &model, std::vector
 
 bool ImportFrontendModelInternalWithPartition(onnx::ModelProto &model, std::vector<mlir::MLIRContext*> &contextList,
     std::vector<OwningOpRef<ModuleOp>> &partModules, ImportOptions options) {
-  int originVersion = CURRENT_ONNX_OPSET;
+    llvm::outs() << "[ImportFrontendModelInternalWithPartition]\n";
+
+    int originVersion = CURRENT_ONNX_OPSET;
   // Get the version of the model
   // Code copied from onnx/onnx/version_coverter/convert.cc
   for (auto it = model.opset_import().begin(); it != model.opset_import().end();
@@ -2237,10 +2383,24 @@ int ImportFrontendModelFileWithPartition(StringRef model_fname, std::vector<mlir
   //check and set node name
   for(int i = 0; i < model.mutable_graph()->node_size(); i++) {
     auto snode = model.mutable_graph()->mutable_node(i);
-    if(snode->name().size()==0) {
+    std::string name = snode->name();
+    if(name.size()==0) {
       snode->set_name(snode->op_type() + "_" + std::to_string(i));
     }
+
+    if(name.find(':') != std::string::npos) {
+        name.erase(std::remove(name.begin(), name.end(), ':'), name.end());
+        snode->set_name(name);
+    }
+//    std::cout << "loaded node name: " << snode->name() << std:: endl;
   }
+
+//    if (!ImportFrontendModelInternal(model, *(contextList[0]), partModules[0], options)) {
+//        *errorMessage = "Onnx Model Import Failed on " + model_fname.str();
+//        return CompilerFailure;
+//    }
+
+
 
   if (!ImportFrontendModelInternalWithPartition(model, contextList, partModules, options)) {
     *errorMessage = "Onnx Model Import Failed on " + model_fname.str();
@@ -2254,7 +2414,8 @@ void ImportFrontendModel(const onnx::ModelProto &model, MLIRContext &context,
     OwningOpRef<ModuleOp> &module, ImportOptions options) {
 
   detail::FrontendGenImpl myONNXGen(context);
-  module = myONNXGen.ImportONNXModel(model, options);
+//  module = myONNXGen.ImportONNXModel(model, options);
+    myONNXGen.ImportONNXModel(model, options, module);
 }
 
 

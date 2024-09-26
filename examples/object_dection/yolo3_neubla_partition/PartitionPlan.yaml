@@ -1,8 +1,8 @@
 ---
-- name: default
+- name: yolov3_neubla
   numPartitions: 2
   backendNames: CPU:CPU
-  emitNames: EmitONNXBasic:EmitONNXBasic
+  emitNames: ONNXBasic:ONNXBasic
   partitionNames: p0:p1
   nodeToPartition:
     :input_QuantizeLinear-p0

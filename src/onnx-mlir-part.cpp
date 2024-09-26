@@ -100,10 +100,12 @@ int main(int argc, char *argv[]) {
   std::string errorMessage;
   int rc;
   auto partitionP = partition.get();
-  rc = processInputFileWithPartition(inputFilename, contextList, partModules,
-      &errorMessage, std::move(partition));
 
-  if (rc != 0) {
+    rc = processInputFileWithPartition(inputFilename, contextList, partModules,
+                                       &errorMessage, std::move(partition));
+
+
+    if (rc != 0) {
     if (!errorMessage.empty())
       llvm::errs() << errorMessage << "\n";
     return 1;
@@ -114,25 +116,29 @@ int main(int argc, char *argv[]) {
   std::vector<std::string> funcNameList, outputNameList;
   for(mlir::OwningOpRef<mlir::ModuleOp>& m: partModules) {
     std::string baseName = outputBaseName + "_p" + std::to_string(idx);
-    std::cout << "base name = " << baseName << std::endl;
+//    std::cout << "base name = " << baseName << std::endl;
 
     emissionTarget = getEmitType(partitionP->getPartitionPlanInfo().partitionEmitMap_[partitionP->getPartitionPlanInfo().partitionNames_[idx]]);
     std::cout << "emit name = " << partitionP->getPartitionPlanInfo().partitionEmitMap_[partitionP->getPartitionPlanInfo().partitionNames_[idx]] << std::endl;
     auto contextP = contextList.at(idx);
     compileModule(m, *contextP, baseName, emissionTarget);
 
-    std::string funcName = "run_p" +  std::to_string(idx) + "_" + outputBaseName; // Modify! ==> find from moudles.
-    std::cout << "funcName = " << funcName << std::endl;
-    funcNameList.push_back(funcName);
+    if(emissionTarget == EmissionTargetType::EmitObj) {
 
-    std::string outputName = outputBaseName + "_p" + std::to_string(idx); // Modify! ==> find from moudles.
-    std::cout << "outputName = " << outputName << std::endl;
-    outputNameList.push_back(outputName);
+        std::string funcName = "run_p" + std::to_string(idx) + "_" + outputBaseName; // Modify! ==> find from moudles.
+        std::cout << "funcName = " << funcName << std::endl;
+        funcNameList.push_back(funcName);
+
+        std::string outputName = outputBaseName + "_p" + std::to_string(idx); // Modify! ==> find from moudles.
+        std::cout << "outputName = " << outputName << std::endl;
+        outputNameList.push_back(outputName);
+    }
 
     idx++;
   }
-
-  partition->genUserMainFile(funcNameList, outputNameList);
+  if(emissionTarget == EmissionTargetType::EmitObj) {
+    partition->genUserMainFile(funcNameList, outputNameList);
+  }
 
   std::cout << "=== end onnx-mlir-pt ===" << std::endl;
   return 0;
