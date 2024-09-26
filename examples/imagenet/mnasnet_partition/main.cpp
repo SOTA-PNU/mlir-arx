@@ -22,7 +22,6 @@ int main(int argc, char **argv) {
   static float img_data[3*224*224];
   loadImagesAndPreprocess(argv[1], img_data, shape);
 
-
   // Create a tensor using omTensorCreateWithOwnership (returns a pointer to the OMTensor).
   // When the parameter, owning is set to "true", the OMTensor will free the data
   // pointer (img_data) upon destruction. If owning is set to false, the data pointer will
