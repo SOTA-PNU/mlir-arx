@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# pwd: /home/user/app
-# chmod 655 build_mlir.sh
+# In: /home/{username}/app/3rdparty
+
 git clone -n https://github.com/llvm/llvm-project.git
 cd llvm-project && git checkout e86910337f98e57f5b9253f7d80d5b916eb1d97e && cd ..
 
