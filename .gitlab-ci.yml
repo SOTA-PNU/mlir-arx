@@ -1,0 +1,28 @@
+stages:
+  - build
+
+variables:
+  DOCKER_IMAGE: "onnx-mlir"
+  CONTAINER_NAME: "onnx-mlir"
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_HOST: "tcp://docker:2375"
+
+services:
+  - name: docker:dind
+
+before_script:
+  - apt-get update && apt-get install -y docker.io dos2unix
+
+build:
+  stage: build
+  script:
+    - git clone --recursive https://gitlab.com/m0z3li/onnx-mlir.git
+    - cd onnx-mlir
+    - docker build -t $DOCKER_IMAGE .
+    - docker run -d --name $CONTAINER_NAME -v $(pwd)/app $DOCKER_IMAGE
+    - sleep 5
+    - docker ps
+    - docker exec -i $CONTAINER_NAME /bin/bash -c "cd /home/intern/app && ./setup.sh"
+  artifacts:
+    paths:
+      - mlir-arx/
