@@ -19,16 +19,23 @@ build-docker:
       --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile"
       --destination "${DOCKER_USERNAME}/onnxmlir/onnx-mlir-dev:${CI_COMMIT_REF_NAME}"
       --destination "${DOCKER_USERNAME}/onnxmlir/onnx-mlir-dev:latest"
-      --no-push
+  rules:
+    #    - if: $CI_COMMIT_REF_PROTECTED == "true"
+#    - changes:
+#        - docker/Dockerfile
+
 
 build:
   stage: build
   image: ${DOCKER_USERNAME}/onnxmlir/onnx-mlir-dev:latest
+  variables:
+    WORK_DIR: /workdir
+    LLVM_PROJECT_ROOT: ${WORK_DIR}/llvm-project
   before_script:
     - pwd
     - mkdir -p build && cd build
   script:
-    - cmake -G ninja -DCMAKE_CXX_COMPILER=/usr/bin/c++ -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DMLIR_DIR=/workdir/llvm-project/build/lib/cmake/mlir -DONNX_MLIR_ENABLE_STABLEHLO=OFF ..
+    - cmake -G ninja -DCMAKE_CXX_COMPILER=/usr/bin/c++ -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DMLIR_DIR=/workdir/llvm-project/build/lib/cmake/mlir  ..
     - cmake --build onnx-mlir
     - cmake --build check-onnx-lit
 
