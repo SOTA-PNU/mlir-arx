@@ -5,7 +5,6 @@ stages:
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
 
-
 build-docker:
   stage: build-docker
   image:
@@ -16,13 +15,27 @@ build-docker:
   script:
     - /kaniko/executor
       --context "${CI_PROJECT_DIR}"
-      --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile"
-      --destination "${DOCKER_USERNAME}/onnxmlir/onnx-mlir-dev:${CI_COMMIT_REF_NAME}"
-      --destination "${DOCKER_USERNAME}/onnxmlir/onnx-mlir-dev:latest"
-  rules:
-    #    - if: $CI_COMMIT_REF_PROTECTED == "true"
-#    - changes:
-#        - docker/Dockerfile
+      --dockerfile "${CI_PROJECT_DIR}/utils/docker/Dockerfile"
+      --destination "onesai/onnxmlir/onnx-mlir-dev:${CI_COMMIT_REF_NAME}"
+      --destination "onesai/onnxmlir/onnx-mlir-dev::latest"
+
+#build-docker:
+#  stage: build-docker
+#  image:
+#    name: gcr.io/kaniko-project/executor:debug
+#    entrypoint: [""]
+#  before_script:
+#    - echo "{\"auths\":{\"${DOCKER_REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${DOCKER_USERNAME}" "${DOCKER_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+#  script:
+#    - /kaniko/executor
+#      --context "${CI_PROJECT_DIR}"
+#      --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile"
+#      --destination "${DOCKER_USERNAME}/onnxmlir/onnx-mlir-dev:${CI_COMMIT_REF_NAME}"
+#      --destination "${DOCKER_USERNAME}/onnxmlir/onnx-mlir-dev:latest"
+#  rules:
+#    #    - if: $CI_COMMIT_REF_PROTECTED == "true"
+##    - changes:
+##        - docker/Dockerfile
 
 
 build:
