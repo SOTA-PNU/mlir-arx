@@ -15,7 +15,7 @@ build-docker:
   script:
     - /kaniko/executor
       --context "${CI_PROJECT_DIR}"
-      --dockerfile "${CI_PROJECT_DIR}/utils/docker/Dockerfile"
+      --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile"
       --destination "onesai/onnxmlir/onnx-mlir-dev:${CI_COMMIT_REF_NAME}"
       --destination "onesai/onnxmlir/onnx-mlir-dev::latest"
 
