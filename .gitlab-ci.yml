@@ -16,8 +16,8 @@ build-docker:
     - /kaniko/executor
       --context "${CI_PROJECT_DIR}"
       --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile"
-      --destination "onesai/onnxmlir2/onnx-mlir-dev:tt"
-      --destination "onesai/onnxmlir2/onnx-mlir-dev:latest"
+      --destination "onesai/onnxmlir/onnx-mlir-dev:${CI_COMMIT_REF_NAME}"
+      --destination "onesai/onnxmlir/onnx-mlir-dev:latest"
 
 #build-docker:
 #  stage: build-docker
