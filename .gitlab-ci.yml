@@ -2,8 +2,8 @@ stages:
   - build-docker
   - build
 
-variables:
-  GIT_SUBMODULE_STRATEGY: recursive
+#variables:
+#  GIT_SUBMODULE_STRATEGY: recursive
 
 build-docker:
   stage: build-docker
