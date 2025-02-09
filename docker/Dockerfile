@@ -66,4 +66,6 @@ RUN cd llvm-project/build && cmake -G Ninja ../llvm \
 RUN cd llvm-project/build && cmake --build . -- ${MAKEFLAGS}
 RUN cd llvm-project/build && cmake --build . --target check-mlir
 
+RUN rm -rf /workdir/onnx-mlir
+
 ENV PATH=$PATH:/workdir/onnx-mlir/build/Debug/bin/:/workdir/onnx-mlir/build/Debug/lib:/workdir/llvm-project/build/bin
