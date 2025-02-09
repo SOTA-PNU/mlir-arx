@@ -13,7 +13,6 @@ build-docker:
     - ls
     - ls third_party
     - ls third_party/onnx
-    - git log
   script:
     - /kaniko/executor
       --context "${CI_PROJECT_DIR}"
@@ -23,10 +22,10 @@ build-docker:
   cache:
     key: "${CI_COMMIT_REF_SLUG}"
     paths: [ ]
-#  rules:
-#    #    - if: $CI_COMMIT_REF_PROTECTED == "true"
-#    - changes:
-#        - docker/Dockerfile
+  rules:
+    #    - if: $CI_COMMIT_REF_PROTECTED == "true"
+    - changes:
+        - docker/Dockerfile
 
 #build-docker:
 #  stage: build-docker
@@ -60,6 +59,8 @@ build:
     - pwd
     - mkdir -p build && cd build
   script:
+    - ls
+    - rm -rf third_party/*
     - git submodule update --init --recursive
     - cmake -G Ninja -DCMAKE_CXX_COMPILER=/usr/bin/c++ -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DMLIR_DIR=/workdir/llvm-project/build/lib/cmake/mlir  ..
     - cmake --build . --target onnx-mlir
