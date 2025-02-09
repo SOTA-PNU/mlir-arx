@@ -13,6 +13,7 @@ build-docker:
     - ls
     - ls third_party
     - ls third_party/onnx
+    - git log
   script:
     - /kaniko/executor
       --context "${CI_PROJECT_DIR}"
