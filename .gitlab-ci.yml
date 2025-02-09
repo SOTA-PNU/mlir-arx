@@ -16,8 +16,9 @@ build-docker:
     - /kaniko/executor
       --context "${CI_PROJECT_DIR}"
       --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile"
-      --destination "onesai/onnx-mlir-dev:${CI_COMMIT_REF_NAME}"
-      --destination "onesai/onnx-mlir-dev:latest"
+      --destination "${DOCKER_IMAGE}:${CI_COMMIT_REF_NAME}"
+      --destination "${DOCKER_IMAGE}:latest"
+
 
 #build-docker:
 #  stage: build-docker
@@ -40,7 +41,7 @@ build-docker:
 
 build:
   stage: build
-  image: onesai/onnx-mlir-dev:latest
+  image: ${DOCKER_IMAGE}:latest
   variables:
     WORK_DIR: /workdir
     LLVM_PROJECT_ROOT: ${WORK_DIR}/llvm-project
