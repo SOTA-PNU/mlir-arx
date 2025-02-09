@@ -48,11 +48,15 @@ build:
   variables:
     WORK_DIR: /workdir
     LLVM_PROJECT_ROOT: ${WORK_DIR}/llvm-project
+    NPROC: 40
+    ACCEL: NNPA
+    CC: clang
+    CXX: clang++
   before_script:
     - pwd
     - mkdir -p build && cd build
   script:
-    - cmake -G Ninja -DCMAKE_CXX_COMPILER=/usr/bin/c++ -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DMLIR_DIR=/workdir/llvm-project/build/lib/cmake/mlir  ..
+    - LIT_OPTS=-v cmake -G Ninja -DCMAKE_CXX_COMPILER=/usr/bin/c++ -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DMLIR_DIR=/workdir/llvm-project/build/lib/cmake/mlir  ..
     - cmake --build . --target onnx-mlir
     - cmake --build . --target check-onnx-lit
 
