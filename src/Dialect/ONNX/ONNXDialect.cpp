@@ -16,7 +16,7 @@
 #include "src/Dialect/ONNX/ONNXOps.hpp"
 
 using namespace mlir;
-sdfsdf
+
 //===----------------------------------------------------------------------===//
 // ONNX Dialect: TableGen generated implementation
 //===----------------------------------------------------------------------===//
