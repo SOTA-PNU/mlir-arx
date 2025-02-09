@@ -18,7 +18,10 @@ build-docker:
       --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile"
       --destination "${DOCKER_IMAGE}:${CI_COMMIT_REF_NAME}"
       --destination "${DOCKER_IMAGE}:latest"
-
+  rules:
+    #    - if: $CI_COMMIT_REF_PROTECTED == "true"
+    - changes:
+        - docker/Dockerfile
 
 #build-docker:
 #  stage: build-docker
