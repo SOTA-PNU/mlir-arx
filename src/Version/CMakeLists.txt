@@ -1,11 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 
-# We would like the VCSVersion.inc file to contain both the llvm and onnx-mlir
-# git revision. This is trivial for onnx-mlir, however, we cannot guarantee
-# that we will have access to the llvm source. If the source directory exists,
-# we attempt to use it to get the version. Otherwise, we rely on LLVM_APPEND_VC_REV
-# and VCSRevision.h.
-
 set(version_inc "${ONNX_MLIR_BIN_ROOT}/VCSVersion.inc")
 set(generate_vcs_version_script "${LLVM_CMAKE_DIR}/GenerateVersionFromVCS.cmake")
 set(vcs_depends "${generate_vcs_version_script}")
@@ -18,13 +12,17 @@ if (LLVM_APPEND_VC_REV)
   set(llvm_source_dir ${LLVM_BUILD_MAIN_SRC_DIR})
 endif()
 
+# Git 저장소 URL에 비밀번호가 포함되는 문제를 방지하기 위해 URL을 직접 지정
+set(LLVM_FORCE_VC_REPOSITORY "https://gitlab.com/ones-ai/onnx-mlir.git")
+
 list(APPEND vcs_generate_commands
-  COMMAND ${CMAKE_COMMAND} [[-DNAMES="LLVM\;ONNX_MLIR"]]
-                           "-DLLVM_SOURCE_DIR=${llvm_source_dir}"
-                           "-DONNX_MLIR_SOURCE_DIR=${onnx_mlir_source_dir}"
-                           "-DHEADER_FILE=${version_inc}.tmp"
-                           -P "${generate_vcs_version_script}"
-  )
+        COMMAND ${CMAKE_COMMAND} [[-DNAMES="LLVM\;ONNX_MLIR"]]
+        "-DLLVM_SOURCE_DIR=${llvm_source_dir}"
+        "-DONNX_MLIR_SOURCE_DIR=${onnx_mlir_source_dir}"
+        "-DLLVM_FORCE_VC_REPOSITORY=${LLVM_FORCE_VC_REPOSITORY}"
+        "-DHEADER_FILE=${version_inc}.tmp"
+        -P "${generate_vcs_version_script}"
+)
 
 find_first_existing_vc_file("${LLVM_BUILD_MAIN_SRC_DIR}" llvm_vc)
 if (llvm_vc)
@@ -33,36 +31,36 @@ elseif (LLVM_APPEND_VC_REV)
   set(add_llvm_version_header_script "${CMAKE_CURRENT_SOURCE_DIR}/AddLLVMVersionHeader.cmake")
   list(APPEND vcs_depends "${add_llvm_version_header_script}")
   list(APPEND vcs_generate_commands
-    COMMAND ${CMAKE_COMMAND} "-DHEADER_FILE=${version_inc}.tmp"
-                             -P "${add_llvm_version_header_script}"
-    )
+          COMMAND ${CMAKE_COMMAND} "-DHEADER_FILE=${version_inc}.tmp"
+          -P "${add_llvm_version_header_script}"
+  )
 endif()
 
 list(APPEND vcs_generate_commands
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${version_inc}.tmp" "${version_inc}"
-  COMMAND ${CMAKE_COMMAND} -E remove "${version_inc}.tmp"
-  )
-
-add_custom_command(OUTPUT "${version_inc}"
-  DEPENDS "${vcs_depends}"
-  ${vcs_generate_commands}
-  )
-
-set_source_files_properties("${version_inc}"
-  PROPERTIES GENERATED TRUE
-             HEADER_FILE_ONLY TRUE
-  )
-
-add_onnx_mlir_library(OMVersion
-  Version.cpp
-  ${version_inc}
-
-  LINK_LIBS PUBLIC
-    LLVMSupport
-    LLVMTargetParser
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${version_inc}.tmp" "${version_inc}"
+        COMMAND ${CMAKE_COMMAND} -E remove "${version_inc}.tmp"
 )
 
-# Obtain the commit hash of a specific repo. You must specify the path and the variable name.
+add_custom_command(OUTPUT "${version_inc}"
+        DEPENDS "${vcs_depends}"
+        ${vcs_generate_commands}
+)
+
+set_source_files_properties("${version_inc}"
+        PROPERTIES GENERATED TRUE
+        HEADER_FILE_ONLY TRUE
+)
+
+add_onnx_mlir_library(OMVersion
+        Version.cpp
+        ${version_inc}
+
+        LINK_LIBS PUBLIC
+        LLVMSupport
+        LLVMTargetParser
+)
+
+# Git short hash 가져오기
 function(get_short_hash path out_var)
   if(NOT EXISTS "${path}")
     return()
@@ -70,11 +68,11 @@ function(get_short_hash path out_var)
   find_package(Git)
   if(GIT_FOUND)
     execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
-      WORKING_DIRECTORY ${path}
-      RESULT_VARIABLE SHORT_HASH_RESULT
-      OUTPUT_VARIABLE SHORT_HASH_OUTPUT
-      ERROR_QUIET
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
+            WORKING_DIRECTORY ${path}
+            RESULT_VARIABLE SHORT_HASH_RESULT
+            OUTPUT_VARIABLE SHORT_HASH_OUTPUT
+            ERROR_QUIET
+            OUTPUT_STRIP_TRAILING_WHITESPACE)
     file(WRITE "${ONNX_MLIR_BIN_ROOT}/SHORT_HASH_FILE" ${SHORT_HASH_OUTPUT})
   endif()
 endfunction()
