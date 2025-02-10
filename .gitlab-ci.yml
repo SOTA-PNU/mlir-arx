@@ -12,9 +12,6 @@ build-docker:
     entrypoint: [""]
   before_script:
     - echo "{\"auths\":{\"${DOCKER_REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${DOCKER_USERNAME}" "${DOCKER_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
-    - ls
-    - ls third_party
-    - ls third_party/onnx
   script:
     - /kaniko/executor
       --context "${CI_PROJECT_DIR}"
