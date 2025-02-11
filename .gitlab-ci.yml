@@ -61,6 +61,10 @@ build:
     - cmake -G Ninja -DCMAKE_CXX_COMPILER=/usr/bin/c++ -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DMLIR_DIR=/workdir/llvm-project/build/lib/cmake/mlir  ..
     - cmake --build . --target onnx-mlir
     - cmake --build . --target check-onnx-lit
+    - cd ../docs/mnist_example/
+    - /workdir/onnx-mlir/build/Release/onnx-mlir mnist.onnx
+    - g++ --std=c++11 -O3 mnist.cpp ./mnist.so -o mnist -I /workdir/onnx-mlir/include
+    - ./mnist
 
 
 
