@@ -2,8 +2,8 @@ stages:
   - build-docker
   - build
 
-variables:
-  GIT_SUBMODULE_STRATEGY: recursive
+#variables:
+#  GIT_SUBMODULE_STRATEGY: recursive
 
 build-docker:
   stage: build-docker
@@ -18,13 +18,7 @@ build-docker:
       --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile"
       --destination "${DOCKER_IMAGE}:${CI_COMMIT_REF_NAME}"
       --destination "${DOCKER_IMAGE}:latest"
-  cache:
-    key: "${CI_COMMIT_REF_SLUG}"
-    paths: [ ]
-  rules:
-    #    - if: $CI_COMMIT_REF_PROTECTED == "true"
-    - changes:
-        - docker/Dockerfile
+
 
 #build-docker:
 #  stage: build-docker
@@ -58,9 +52,11 @@ build:
     - pwd
     - mkdir -p build && cd build
   script:
+    - ls
+    - rm -rf /builds/ones-ai/mlir-arx/third_party/*
+    - git submodule update --init --recursive
     - cmake -G Ninja -DCMAKE_CXX_COMPILER=/usr/bin/c++ -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DMLIR_DIR=/workdir/llvm-project/build/lib/cmake/mlir  ..
     - cmake --build . --target onnx-mlir
     - cmake --build . --target check-onnx-lit
-
 
 
