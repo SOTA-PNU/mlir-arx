@@ -2,8 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//===---------- ONNXToZHighCommon.hpp - Common functions in ONNXToZHigh
-//---------===//
+//===---- ONNXToZHighCommon.hpp - Common functions in ONNXToZHigh ---------===//
 //
 // Copyright 2019-2024 The IBM Research Authors.
 //
@@ -31,9 +30,16 @@ const std::string NNPA_DEVICE = "nnpa";
 
 bool isEnableScalarBcastBinary();
 
-struct OnnxToZHighLoweringConfiguration {
+// Populated by configureONNXToZHighLoweringPass().
+struct ONNXToZHighLoweringConfiguration {
   static int optReportNNPAUnsupportedOps;
   static int reportOnNNPAUnsupportedOps;
+  static bool isDynQuant;
+  struct Quant {
+    static bool isActivationSym;
+    static bool isWeightSym;
+    static llvm::SmallVector<std::string> opTypes;
+  };
 };
 
 template <typename OP_TYPE>

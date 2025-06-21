@@ -4,7 +4,7 @@
 
 //===------------------------ CompilerOptions.cpp -------------------------===//
 //
-// Copyright 2022, 2023 The IBM Research Authors.
+// Copyright 2022-2025 The IBM Research Authors.
 //
 // =============================================================================
 //
@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Support/Debug.h"
+#include "llvm/TargetParser/Host.h"
 
 #include "ExternalUtil.hpp"
 #include "onnx-mlir/Compiler/OMCompilerRuntimeTypes.h"
@@ -33,6 +34,7 @@ std::vector<accel::Accelerator::Kind> maccel;          // common for both
 OptLevel OptimizationLevel;                            // common for both
 std::string mtriple;                                   // common for both
 std::string mcpu;                                      // common for both
+float nnpaEpsilon;                                     // common for both
 std::string march;                                     // common for both
 InstrumentStages instrumentStage;                      // common for both
 bool onnxConstPropRoundFPToInt;                        // common for both
@@ -44,11 +46,15 @@ std::string opsForCall;                                // common for both
 bool disableKrnlOpFusion;                              // common for both
 bool disableQuantZeroPoint;                            // common for both
 bool enableKrnlBufferReuse;                            // common for both
+bool enableSafeCodeGen;                                // common for both
 bool disableMemRefPrefetch;                            // common for both
+uint64_t compilationNumThreads;                        // common for both
+std::vector<std::string> decomposeOpsInONNX;           // common for both
 EmissionTargetType emissionTarget;                     // onnx-mlir only
 bool invokeOnnxVersionConverter;                       // onnx-mlir only
 bool preserveLocations;                                // onnx-mlir only
 bool printIR;                                          // onnx-mlir only
+bool doNotEmitFullMLIRCode;                            // onnx-mlir only
 bool preserveBitcode;                                  // onnx-mlir only
 bool preserveLLVMIR;                                   // onnx-mlir only
 bool preserveMLIR;                                     // onnx-mlir only
@@ -68,6 +74,7 @@ std::string instrumentOps;                             // onnx-mlir only
 unsigned instrumentControlBits;                        // onnx-mlir only
 std::string parallelizeOps;                            // onnx-mlir only
 std::string instrumentSignatures;                      // onnx-mlir only
+std::string instrumentOnnxNode;                        // onnx-mlir only
 std::string ONNXOpStats;                               // onnx-mlir only
 int onnxOpTransformThreshold;                          // onnx-mlir only
 bool onnxOpTransformReport;                            // onnx-mlir only
@@ -87,7 +94,6 @@ std::vector<std::string> extraLibPaths;                // onnx-mlir only
 std::vector<std::string> extraLibs;                    // onnx-mlir only
 ProfileIRs profileIR;                                  // onnx-mlir only
 OptReport optReport;                                   // onnx-mlir only
-bool useOldBufferization;                              // onnx-mlir only
 bool enableTiming;                                     // onnx-mlir only
 bool enableBoundCheck;                                 // onnx-mlir only
 bool split_input_file;                                 // onnx-mlir-opt only
@@ -158,8 +164,18 @@ static llvm::cl::opt<std::string, true> mcpuOpt("mcpu",
     llvm::cl::location(mcpu), llvm::cl::cat(OnnxMlirCommonOptions),
     llvm::cl::ValueRequired);
 
+static llvm::cl::opt<float, true> nnpaEpsilonOpt("nnpa-epsilon",
+    // TODO: what text should go here.
+    llvm::cl::desc("A value added to inputs during computations to prevent "
+                   "undefined mathematical operations, \n"
+                   "such as division by zero or logarithms of zero. Default "
+                   "value set to 1e-5."),
+    llvm::cl::value_desc("Float value"), llvm::cl::location(nnpaEpsilon),
+    llvm::cl::cat(OnnxMlirCommonOptions), llvm::cl::init(1e-5));
+
 static llvm::cl::opt<std::string, true> marchOpt("march",
-    llvm::cl::desc("Target architecture to generate code for."),
+    llvm::cl::desc("Target architecture to generate code for.\n"
+                   "--march=native will use the host's archituecture"),
     llvm::cl::value_desc("Target a specific architecture type"),
     llvm::cl::location(march), llvm::cl::cat(OnnxMlirCommonOptions),
     llvm::cl::ValueRequired);
@@ -233,12 +249,32 @@ static llvm::cl::opt<bool, true> enableKrnlBufferReuseOpt(
     llvm::cl::location(enableKrnlBufferReuse), llvm::cl::init(false),
     llvm::cl::cat(OnnxMlirCommonOptions));
 
+static llvm::cl::opt<bool, true> enableSafeCodeGenOpt("enable-safe-code-gen",
+    llvm::cl::desc("enable extra runtime check to be created in code gen. "
+                   "Such check will have cost at runtime, and is not needed if"
+                   "the model and the data are correct."
+                   "Failure of check will trigger assertion error."
+                   "(default=false).\n"
+                   "Set to 'true' if you want to enable the check."),
+    llvm::cl::location(enableSafeCodeGen), llvm::cl::init(false),
+    llvm::cl::cat(OnnxMlirCommonOptions));
+
+// TODO(alexe) re-enable prefetch.
 static llvm::cl::opt<bool, true> disableMemRefPrefetchOpt(
     "disable-memref-prefetch",
     llvm::cl::desc("Disable generation of memref.prefetch (default=false).\n"
                    "Set to 'true' if you want to disable prefetch."),
-    llvm::cl::location(disableMemRefPrefetch), llvm::cl::init(false),
+    llvm::cl::location(disableMemRefPrefetch), llvm::cl::init(true),
     llvm::cl::cat(OnnxMlirCommonOptions));
+
+static llvm::cl::list<std::string, std::vector<std::string>>
+    decomposeOpsInONNXOpt("decompose-op-in-onnx",
+        llvm::cl::desc("Specify ONNX operations to decompose.\n"
+                       "Supported Ops - HardSwish"),
+        llvm::cl::value_desc("ONNX operation to decompose"),
+        llvm::cl::location(decomposeOpsInONNX),
+        llvm::cl::cat(OnnxMlirCommonOptions), llvm::cl::CommaSeparated,
+        llvm::cl::ZeroOrMore);
 
 static llvm::cl::opt<bool, true> disableRecomposeOptionOpt("disable-recompose",
     llvm::cl::desc("Disable recomposition of ONNX operations."),
@@ -280,6 +316,16 @@ static llvm::cl::opt<bool, true> preserveLocationsOpt("preserveLocations",
 static llvm::cl::opt<bool, true> printIROpt("printIR",
     llvm::cl::desc("Print the IR to stdout:."), llvm::cl::location(printIR),
     llvm::cl::init(false), llvm::cl::cat(OnnxMlirOptions));
+
+static llvm::cl::opt<bool, true> doNotEmitFullMLIRCodeOpt(
+    "do-not-emit-full-mlir-code",
+    llvm::cl::desc(
+        "Do not emit the MLIR the constant values are embeded "
+        "(<name>onnx.mlir). Emit only the MLIR without the constants "
+        "(<name>.tmp). Need to be used with emitting MLIR options such as "
+        "--EmitONNXIR and --EmitMLIR."),
+    llvm::cl::location(doNotEmitFullMLIRCode), llvm::cl::init(false),
+    llvm::cl::cat(OnnxMlirOptions));
 
 static llvm::cl::opt<bool, true> preserveBitcodeOpt("preserveBitcode",
     llvm::cl::desc("Preserve the bitcode files (optimized and unoptimized)."),
@@ -468,15 +514,42 @@ static llvm::cl::opt<std::string, true> parallelizeOpsOpt("parallelize-ops",
 
 static llvm::cl::opt<std::string, true> instrumentSignatureOpt(
     "instrument-signature",
-    llvm::cl::desc("Specify which high-level operations should print their"
-                   " input type(s) and shape(s)\n"
-                   "\"ALL\" or \"\" for all available operations.\n"
-                   "\"NONE\" for no instrument (default).\n"
-                   "\"ops1,ops2, ...\" for the multiple ops.\n"
-                   "e.g. \"onnx.MatMul,onnx.Add\" for MatMul and Add ops.\n"
-                   "Asterisk is also available.\n"
-                   "e.g. \"onnx.*\" for all onnx operations.\n"),
+    llvm::cl::desc(
+        "Specify which high-level operations should be selected for printing\n"
+        "the type and shape of their input/output tensors.\n"
+        "The ops are selected by their op name.\n"
+        "The instrument-signature defines the pattern to select the ops.\n"
+        "\"NONE\" for no instrument (default).\n"
+        "\"ALL\" or \"\" for all available operations.\n"
+        "Except for the special values, the regexp is used for matching.\n"
+        "\"ops1,ops2, ...\" for the multiple ops.\n"
+        "e.g. \"onnx.MatMul,onnx.Add\" for MatMul and Add op in onnx dialect.\n"
+        "Asterisk is also available.\n"
+        "e.g. \"onnx.*\" for all onnx operations.\n"),
     llvm::cl::location(instrumentSignatures), llvm::cl::init("NONE"),
+    llvm::cl::cat(OnnxMlirOptions));
+
+static llvm::cl::opt<std::string, true> instrumentONNXNodeOpt(
+    "instrument-onnx-node",
+    llvm::cl::desc(
+        "Specify which onnx operation node will be selected for \n"
+        "inserting a runtime call after the node to print the data of\n"
+        "their input/output tensors.\n"
+        "The ops are selected by their onnx node name, which is a string\n"
+        "attribute unique to each onnx node (most of time).\n"
+        "You can find them in the output of --EmitONNXIR\n"
+        "Other instrumentation in onnx-mlir is specified by op->getName(),\n"
+        "namely, the type of onnx operation, such Add, Matmul, and etc.\n"
+        "This option is able to pinpoint to a particular node.\n"
+        "The instrument-onnx-node defines the pattern to select.\n"
+        "\"NONE\" for no instrument (default).\n"
+        "Except for the special values, the regexp is used for matching.\n"
+        "\"/layer1/MatMul, onnx.Add_0, ...\" for the multiple nodes.\n"
+        "Asterisk is also available. For example:\n"
+        "\"onnx.Add_*\" for all AddOp. This feature allows you to specify\n"
+        "part of the target of onnx_node_name, as long as it is long enough\n"
+        "to be unique.\n"),
+    llvm::cl::location(instrumentOnnxNode), llvm::cl::init("NONE"),
     llvm::cl::cat(OnnxMlirOptions));
 
 static llvm::cl::opt<std::string, true> ONNXOpStatsOpt("onnx-op-stats",
@@ -596,6 +669,12 @@ static llvm::cl::opt<bool, true> disableConstantPropOpt("disable-constant-prop",
     llvm::cl::location(disableConstantProp), llvm::cl::init(false),
     llvm::cl::cat(OnnxMlirCommonOptions));
 
+static llvm::cl::opt<uint64_t, true> compilation_num_threads("j",
+    llvm::cl::desc("Use <int> threads for compilation. The default value is "
+                   "0, which spawns threads for all available CPUs.\n"),
+    llvm::cl::location(compilationNumThreads), llvm::cl::init(0),
+    llvm::cl::cat(OnnxMlirCommonOptions));
+
 static llvm::cl::list<std::string, std::vector<std::string>> extraLibPathsOpt(
     "L",
     llvm::cl::desc(
@@ -644,8 +723,22 @@ static llvm::cl::opt<bool, true> enable_bound_check("enable-bound-check",
     llvm::cl::location(enableBoundCheck), llvm::cl::init(false),
     llvm::cl::cat(OnnxMlirOptions));
 
+/*
+  How to use the optional optimization for testing.
+
+  #include "src/Compiler/CompilerOptions.hpp"
+
+  if (debugTestCompilerOpt) {
+    fprintf(stderr, "use new optimization\n");
+    // invoke optimization.
+  }
+
+  And to invoke on the command option (Debug mode only).
+
+  onnx-mlir -test-compiler-opt
+*/
 #if defined(_DEBUG)
-// Option only available in debug mode: set using command options.
+
 static llvm::cl::opt<bool, true> test_compiler_opt("test-compiler-opt",
     llvm::cl::desc(
         "Help compiler writers test a new (small) optimization. When false, "
@@ -687,15 +780,6 @@ static llvm::cl::opt<bool, true> allowUnregisteredDialectsOpt(
     llvm::cl::desc("Allow operation with no registered dialects."),
     llvm::cl::location(allowUnregisteredDialects), llvm::cl::init(false),
     llvm::cl::cat(OnnxMlirOptOptions));
-
-// Removed once the new LLVM bufferization works without performance regression.
-static llvm::cl::opt<bool, true> useOldBufferizationOpt("use-old-bufferization",
-    llvm::cl::desc(
-        "Enable the old LLVM bufferization mechanism (default=true).\n"
-        "This option should be removed once the new LLVM bufferization works "
-        "well in onnx-mlir."),
-    llvm::cl::location(useOldBufferization), llvm::cl::init(true),
-    llvm::cl::cat(OnnxMlirOptions));
 
 // Configuration states associated with certain options.
 // For example, when maccel is specified, NNPA can register
@@ -739,8 +823,8 @@ bool parseCustomEnvFlagsCommandLineOption(
     std::string envVal(envValCstr);
     if (envVal.find("-customEnvFlags") != std::string::npos) {
       if (errs)
-        *errs << "Warning: recursive use of --customEnvFlags in "
-                 "environment flag not permited\n";
+        *errs << "\nWarning: recursive use of --customEnvFlags in "
+                 "environment flag not permited\n\n";
       return false;
     }
     if (envVal.find("-v") != std::string::npos)
@@ -804,7 +888,40 @@ void setTargetArch(const std::string &arch) {
 
 void clearTargetArch() { march.clear(); }
 
-std::string getTargetArchOption() {
+// Sort out architectures for Z systems (hybrid archXX and zYY names).
+static int64_t decodeZArchNum(std::string str) {
+  if (str == "arch12" || str == "z14") // Z14 and equivalents.
+    return 12;
+  if (str == "arch13" || str == "z15") // Z15 and equivalents.
+    return 13;
+  if (str == "arch14" || str == "z16") // Z16 and equivalents.
+    return 14;
+  if (str == "arch15" || str == "z17") // Z17 and equivalents.
+    return 15;
+  return -1;
+}
+
+int64_t getZArchNum(const std::string &arch, const std::string cpu) {
+  // Give priority to march, use (deprecated) mcpu if march is not defined.
+  int64_t num = decodeZArchNum(arch);
+  if (num == -1)
+    num = decodeZArchNum(cpu);
+  return num;
+}
+
+std::string getTargetArchOption(bool forLLVMToolchain) {
+  // LLVM toolchain wants a --march=systemz for all z machines; the specific
+  // Z architecture will be specified with the LLVM Toolchain --mcpu.
+  if (forLLVMToolchain) {
+    // Handle special case for Z.
+    int64_t zArchNum = getZArchNum(march, mcpu);
+    if (zArchNum != -1)
+      return "--march=systemz";
+    // On mac, llc --version seem to want aarch64 or arm64.
+    if (march == "apple-m1" || march == "apple-m2" || march == "apple-m3" ||
+        march == "apple-m4")
+      return "--march=arm64";
+  }
   return (march != "") ? "--march=" + march : "";
 }
 
@@ -817,8 +934,27 @@ void setTargetCPU(const std::string &cpu) {
 
 void clearTargetCPU() { mcpu.clear(); }
 
-std::string getTargetCPUOption() {
-  return (mcpu != "") ? "--mcpu=" + mcpu : "";
+// As the LLVM tooling for Z may not support the latest, cap it by this
+// --mcpu=arch{MAX_LLVM_Z_ARCH_LEVEL} value.
+#define MAX_LLVM_Z_ARCH_LEVEL 14
+
+std::string getTargetCPUOption(bool forLLVMToolchain, bool cpuOnly) {
+  // With cpu only, return the mcpu value; without it, prepend with "--mcpu=".
+  std::string str = (cpuOnly ? "" : "--mcpu=");
+
+  // The LLVM toolchain wants the specific Z architecture to be expressed with
+  // the LLVM Toolchain --mcpu. Convert below the --march into their
+  // corresponding --mcpu equivalent.
+  if (forLLVMToolchain) {
+    // Handle special case for Z.
+    int64_t zArchNum = getZArchNum(march, mcpu);
+    if (zArchNum != -1) {
+      // Cap at max supported LLVM level.
+      zArchNum = std::min(zArchNum, (int64_t)MAX_LLVM_Z_ARCH_LEVEL);
+      return str.append("arch" + std::to_string(zArchNum));
+    }
+  }
+  return (mcpu != "") ? str + mcpu : "";
 }
 
 // Support for Accel.
@@ -1121,9 +1257,9 @@ std::string getExecPath() {
   auto execPath = llvm::sys::fs::getMainExecutable(nullptr, nullptr);
   if (execPath.empty()) {
     llvm::errs()
-        << "Warning: Could not find path to current executable, falling "
+        << "\nWarning: Could not find path to current executable, falling "
            "back to default install path: "
-        << kExecPath << "\n";
+        << kExecPath << "\n\n";
     return kExecPath;
   }
   return execPath;
@@ -1162,16 +1298,16 @@ std::string getLibraryPath() {
 
 // onnx-mlir currently requires llvm tools llc and opt and they are assumed
 // to be under llvm-project/build/bin. This doesn't work with the case where
-// llvm-project has been installed system wide (typically under /usr/local/...)
-// and its source has been removed.
+// llvm-project has been installed system wide (typically under
+// /usr/local/...) and its source has been removed.
 //
 // To account for this scenario, we first search for the tools in the same
-// directory where onnx-mlir is run. If they are found, it means both onnx-mlir
-// and llvm-project have been installed system wide under the same directory,
-// so we get them from that directory (typically /usr/local/bin). Otherwise,
-// at least one of onnx-mlir and llvm-project has not been installed system
-// wide. In this case, getToolPath returns the fallback directory where llvm
-// is built which is typically llvm-project/build/bin.
+// directory where onnx-mlir is run. If they are found, it means both
+// onnx-mlir and llvm-project have been installed system wide under the same
+// directory, so we get them from that directory (typically /usr/local/bin).
+// Otherwise, at least one of onnx-mlir and llvm-project has not been
+// installed system wide. In this case, getToolPath returns the fallback
+// directory where llvm is built which is typically llvm-project/build/bin.
 //
 // Note that this will not work if both onnx-mlir and llvm-project have been
 // installed system wide but to different places and their sources have been
@@ -1179,8 +1315,8 @@ std::string getLibraryPath() {
 // llvm-project.
 //
 // If the flag is true, getToolPath will simply return the path detected by
-// cmake at compile time. This is used for system wide tools such as cc, ld, ar,
-// etc. Note that this means the path is valid only on the system where
+// cmake at compile time. This is used for system wide tools such as cc, ld,
+// ar, etc. Note that this means the path is valid only on the system where
 // onnx-mlir is built. If onnx-mlir is subsequently run on a system that does
 // not have these tools installed in the "standard" places, it will fail.
 //
@@ -1236,8 +1372,8 @@ void initCompilerConfig() {
   // Test option requirements.
   if (!ONNXOpStats.empty() && emissionTarget <= EmitONNXIR)
     llvm::errs()
-        << "Warning: --onnx-op-stats requires targets like --EmitMLIR, "
-           "--EmitLLVMIR, or binary-generating emit commands.\n";
+        << "\nWarning: --onnx-op-stats requires targets like --EmitMLIR, "
+           "--EmitLLVMIR, or binary-generating emit commands.\n\n";
 
   // Library setup for EmitLib and EmitJNI targets
   if (emissionTarget == EmitLib || emissionTarget == EmitJNI) {
@@ -1270,6 +1406,12 @@ void initCompilerConfig() {
       getLLVMOption().find("enable-unsafe-fp-math") == std::string::npos) {
     // Fast math option is enabled (in general)
     setLLVMOption(getLLVMOption() + " --enable-unsafe-fp-math");
+  }
+
+  if (march == "native") {
+    march = std::string(llvm::sys::getHostCPUName());
+    if (VerboseOutput)
+      llvm::outs() << "Native machine set as \"" << march << "\"\n";
   }
 }
 

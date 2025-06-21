@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 
 ############# PyOMRuntime.py #######################################
 #
@@ -8,14 +9,34 @@
 # commom class `PyOMRuntime` called by python scripts
 ################################################################################
 import numpy as np
+import sys
+import os
+import importlib
+import pkgutil
 
-try:
-    from PyRuntimeC import OMExecutionSession as OMExecutionSession_
-except ImportError:
-    raise ImportError(
-        "Looks like you did not build the PyRuntimeC target, build it by running `make PyRuntimeC`."
-        "You may need to set ONNX_MLIR_HOME to `onnx-mlir/build/Debug` since `make PyRuntimeC` outputs to `build/Debug` by default"
+if __package__ == "onnxmlir" or __package__ == "onnxmlirtorch":
+    loader = pkgutil.get_loader("onnxmlir")
+    PyRuntimeC_module = os.path.join(
+        os.path.dirname(loader.get_filename("onnxmlir")), "libs"
     )
+    sys.path.append(PyRuntimeC_module)
+
+    try:
+        from PyRuntimeC import OMExecutionSession as OMExecutionSession_
+    except ImportError:
+        raise ImportError(
+            "Failure to load the prebuild PyRuntimeC*.so for your system."
+            "The reason could be that either your system or your python version is not supported"
+            "Refer to docs/BuildPyRuntimeLight.md to build the driver by yourself"
+        )
+else:
+    try:
+        from PyRuntimeC import OMExecutionSession as OMExecutionSession_
+    except ImportError:
+        raise ImportError(
+            "Looks like you did not build the PyRuntimeC target, build it by running `make PyRuntimeC`."
+            "You may need to set ONNX_MLIR_HOME to `onnx-mlir/build/Debug` since `make PyRuntimeC` outputs to `build/Debug` by default"
+        )
 
 
 class OMExecutionSession(OMExecutionSession_):

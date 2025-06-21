@@ -12,11 +12,13 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/IR/DialectResourceBlobManager.h"
 #include "mlir/IR/TypeUtilities.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/Path.h"
 
 #include "src/Dialect/Mlir/IndexExpr.hpp"
+#include "src/Dialect/ONNX/DialectBuilder.hpp"
 #include "src/Dialect/ONNX/ONNXLayoutHelper.hpp"
 #include "src/Dialect/ONNX/ONNXOps.hpp"
 #include "src/Dialect/ONNX/ONNXOps/OpHelper.hpp"
@@ -307,7 +309,8 @@ void ArrayAttrIntVals(ArrayAttr a, mlir::SmallVectorImpl<int64_t> &i) {
 
 ElementsAttr getElementAttributeFromONNXValue(Value value) {
   ONNXConstantOp constantOp = getONNXConstantOp(value);
-  if (constantOp)
+  // In case the ConstantOp has not been normalized yet
+  if (constantOp && constantOp.getValueAttr())
     return mlir::dyn_cast<ElementsAttr>(constantOp.getValueAttr());
   return nullptr;
 }
@@ -605,13 +608,13 @@ Type convertONNXTypeToMLIRType(
     Builder &builder, onnx::TensorProto_DataType onnxType) {
   switch (onnxType) {
   case onnx::TensorProto_DataType::TensorProto_DataType_FLOAT8E4M3FN:
-    return builder.getFloat8E4M3FNType();
+    return builder.getType<Float8E4M3FNType>();
   case onnx::TensorProto_DataType::TensorProto_DataType_FLOAT8E4M3FNUZ:
-    return builder.getFloat8E4M3FNUZType();
+    return builder.getType<Float8E4M3FNUZType>();
   case onnx::TensorProto_DataType::TensorProto_DataType_FLOAT8E5M2:
-    return builder.getFloat8E5M2Type();
+    return builder.getType<Float8E5M2Type>();
   case onnx::TensorProto_DataType::TensorProto_DataType_FLOAT8E5M2FNUZ:
-    return builder.getFloat8E5M2FNUZType();
+    return builder.getType<Float8E5M2FNUZType>();
   case onnx::TensorProto_DataType::TensorProto_DataType_BFLOAT16:
     return builder.getBF16Type();
   case onnx::TensorProto_DataType::TensorProto_DataType_FLOAT16:
@@ -640,11 +643,13 @@ Type convertONNXTypeToMLIRType(
     return builder.getI1Type();
   case onnx::TensorProto_DataType::TensorProto_DataType_STRING:
     return ONNXStringType::get(builder.getContext());
+  case onnx::TensorProto_DataType::TensorProto_DataType_INT4:
+    return builder.getIntegerType(/*width=*/4);
+  case onnx::TensorProto_DataType::TensorProto_DataType_UINT4:
+    return builder.getIntegerType(/*width=*/4, false);
 
   case onnx::TensorProto_DataType::TensorProto_DataType_COMPLEX64:
   case onnx::TensorProto_DataType::TensorProto_DataType_COMPLEX128:
-  case onnx::TensorProto_DataType::TensorProto_DataType_INT4:
-  case onnx::TensorProto_DataType::TensorProto_DataType_UINT4:
   case onnx::TensorProto_DataType::TensorProto_DataType_UNDEFINED:
     llvm_unreachable("Unsupported data type encountered.");
     return nullptr;
@@ -693,6 +698,10 @@ int64_t mlirTypeToOnnxType(Type elemType) {
           onnxType = (type.isSigned() || type.isUnsigned())
                          ? onnx::TensorProto::UNDEFINED
                          : onnx::TensorProto::BOOL;
+          break;
+        case 4:
+          onnxType = type.isUnsigned() ? onnx::TensorProto::UINT4
+                                       : onnx::TensorProto::INT4;
           break;
         case 8:
           onnxType = type.isUnsigned() ? onnx::TensorProto::UINT8
@@ -871,4 +880,14 @@ std::string getNodeNameInPresenceOfOpt(Operation *op, bool useFileLine) {
   return "NOTSET";
 }
 
+//===----------------------------------------------------------------------===//
+// Support for DenseElementsAttr.
+//===----------------------------------------------------------------------===//
+
+bool isElementAttrUninitializedDenseResource(ElementsAttr elementsAttr) {
+  const auto denseResourceElementsAttr =
+      mlir::dyn_cast<DenseResourceElementsAttr>(elementsAttr);
+  return denseResourceElementsAttr &&
+         !denseResourceElementsAttr.getRawHandle().getBlob();
+}
 } // namespace onnx_mlir

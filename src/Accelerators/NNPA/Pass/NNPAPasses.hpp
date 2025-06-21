@@ -30,7 +30,9 @@ std::unique_ptr<mlir::Pass> createDevicePlacementPass(
 
 /// Add pass for lowering ONNX ops to ZHigh ops.
 std::unique_ptr<mlir::Pass> createONNXToZHighPass();
-void configureOnnxToZHighLoweringPass(bool reportOnNNPAUnsupportedOps);
+void configureONNXToZHighLoweringPass(bool reportOnNNPAUnsupportedOps,
+    bool isDynQuant, bool quantIsActivationSym, bool quantIsWeightSym,
+    llvm::ArrayRef<std::string> quantOpTypes);
 
 /// Add pass for rewriting ONNX ops for ZHigh.
 std::unique_ptr<mlir::Pass> createRewriteONNXForZHighPass();
@@ -49,8 +51,9 @@ std::unique_ptr<mlir::Pass> createZHighLayoutPropagationPass();
 /// Pass for constant propagation at ZHighIR.
 std::unique_ptr<mlir::Pass> createZHighConstPropagationPass();
 
-/// Pass for clipping values to dlfloat before stickification at ZHighIR.
-std::unique_ptr<mlir::Pass> createZHighClipToDLFloatPass();
+/// Pass for scrubbing constants at ZHighIR.
+std::unique_ptr<mlir::Pass> createZHighScrubDisposablePass(
+    bool closeAfter = true);
 
 /// Pass for decomposing stick/unstick at ZHighIR.
 std::unique_ptr<mlir::Pass> createZHighDecomposeStickUnstickPass();

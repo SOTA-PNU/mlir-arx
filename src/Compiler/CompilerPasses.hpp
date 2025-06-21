@@ -20,9 +20,10 @@ namespace onnx_mlir {
 // Configures passes up front based on command line options.
 void configurePasses();
 
-void addONNXToMLIRPasses(mlir::PassManager &pm, bool targetCPU);
+void addONNXToMLIRPasses(mlir::PassManager &pm, bool targetCPU,
+    bool donotScrubDisposableElementsAttr = false);
 void addONNXToKrnlPasses(mlir::PassManager &pm, int optLevel, bool enableCSE,
-    std::string instrumentSignatureString, std::string ONNXOpsStatFilename);
+    std::string ONNXOpsStatFilename);
 void addKrnlToAffinePasses(mlir::PassManager &pm);
 void addKrnlToLLVMPasses(
     mlir::OpPassManager &pm, std::string outputNameNoExt, bool enableCSE);

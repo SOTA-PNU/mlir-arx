@@ -82,7 +82,7 @@ class InferenceSession:
             from PyRuntime import OMExecutionSession
         except ImportError:
             raise ImportError(
-                "Looks like you did not build the PyRuntime target, build it by running `make PyRuntime`.You may need to set ONNX_MLIR_HOME to `onnx-mlir/build/Debug` since `make PyRuntime` outputs to `build/Debug` by default"
+                "Looks like you did not build the PyRuntimeC target, build it by running `make PyRuntimeC`.You may need to set ONNX_MLIR_HOME to `onnx-mlir/build/Debug` since `make PyRuntimeC` outputs to `build/Debug` by default"
             )
         # Initialize status
         self.compiled = False
@@ -101,7 +101,7 @@ class InferenceSession:
         output_path = os.path.join(self.temp_dir.name, self.temp_lib_name)
         command_str += ["-o", output_path]
         if self.target == "zAIU":
-            command_str += ["--maccel=NNPA", "-O3", "--mcpu=z16"]
+            command_str += ["--maccel=NNPA", "-O3", "--march=z16"]
         command_str += self.options.split()
 
         # Compile the model.
@@ -121,7 +121,7 @@ class InferenceSession:
             from PyRuntime import OMExecutionSession
         except ImportError:
             raise ImportError(
-                "Looks like you did not build the PyRuntime target, build it by running `make PyRuntime`.You may need to set ONNX_MLIR_HOME to `onnx-mlir/build/Debug` since `make PyRuntime` outputs to `build/Debug` by default"
+                "Looks like you did not build the PyRuntimeC target, build it by running `make PyRuntimeC`.You may need to set ONNX_MLIR_HOME to `onnx-mlir/build/Debug` since `make PyRuntimeC` outputs to `build/Debug` by default"
             )
 
         # Use the generated shared library to create an execution session.

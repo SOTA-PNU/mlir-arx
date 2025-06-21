@@ -32,9 +32,11 @@
 
 #include "src/Accelerators/NNPA/Compiler/NNPACompilerOptions.hpp"
 #include "src/Accelerators/NNPA/Compiler/NNPACompilerUtils.hpp"
+#include "src/Accelerators/NNPA/Compiler/ZHighDisposableGarbageCollector.hpp"
 #include "src/Accelerators/NNPA/Dialect/ZHigh/ZHighOps.hpp"
 #include "src/Accelerators/NNPA/Dialect/ZLow/ZLowOps.hpp"
 #include "src/Accelerators/NNPA/Pass/NNPAPasses.hpp"
+#include "src/Accelerators/NNPA/Support/NNPALimit.hpp"
 #include "src/Compiler/CompilerOptions.hpp"
 #include "src/Compiler/CompilerPasses.hpp"
 #include "src/Pass/Passes.hpp"
@@ -47,11 +49,56 @@ using namespace onnx_mlir;
 namespace onnx_mlir {
 
 void configurePassesNNPA() {
-  configureOnnxToZHighLoweringPass(optReport == OptReport::NNPAUnsupportedOps);
-  // Compiler generated sticks supports saturation, so force its usage.
-  // TODO: remove this if zDNN adds support for saturation.
-  if (nnpaEnableSaturation)
-    nnpaEnableCompilerStickUnstick = true;
+  // z16 does not support for hardware saturation.
+  // So, force its usage to compiler generated sticks.
+  if (!nnpaDisableSaturation && isLessEqualNNPALevel(NNPALevel::M14))
+    nnpaDisableCompilerStickUnstick = false;
+
+  // Configure ONNXToZHighLoweringPass.
+  bool isDynQuant = !nnpaQuantDynamic.empty();
+  // Default/auto mode: symmetric for weighs and asymmetric for activations.
+  bool isActivationSym = false;
+  bool isWeightSym = true;
+  std::vector<std::string> quantOpTypes;
+  if (isDynQuant) {
+    // Set options for activations and weights if they are given.
+    // When auto mode is specified, the other specified options are ignored.
+    if (!llvm::is_contained(nnpaQuantDynamic, NNPAQuantOptions::autoQuantOpt)) {
+      for (unsigned i = 0; i < nnpaQuantDynamic.size(); ++i) {
+        switch (nnpaQuantDynamic[i]) {
+        case NNPAQuantOptions::symWeight:
+          isWeightSym = true;
+          break;
+        case NNPAQuantOptions::asymWeight:
+          isWeightSym = false;
+          break;
+        case NNPAQuantOptions::symActivation:
+          isActivationSym = true;
+          break;
+        case NNPAQuantOptions::asymActivation:
+          isActivationSym = false;
+          break;
+        default:
+          llvm_unreachable("Unsupported quantization options");
+          break;
+        }
+      }
+    }
+    if (!isWeightSym) {
+      // TODO: Support asymmetric quantiation for weights.
+      llvm::outs()
+          << "Asymmetric quantization for weights is not yet supported. "
+             "Turning off quantization.\n";
+      isDynQuant = false;
+    }
+    if (nnpaQuantOpTypes.empty()) {
+      quantOpTypes.emplace_back("MatMul");
+    } else {
+      quantOpTypes = nnpaQuantOpTypes;
+    }
+  }
+  configureONNXToZHighLoweringPass(optReport == OptReport::NNPAUnsupportedOps,
+      isDynQuant, isActivationSym, isWeightSym, quantOpTypes);
 }
 
 void addONNXToZHighPasses(mlir::PassManager &pm) {
@@ -83,6 +130,7 @@ void addONNXToZHighPasses(mlir::PassManager &pm) {
     pm.addNestedPass<func::FuncOp>(
         onnx_mlir::createInstrumentPass(instrumentOps, instrumentActions));
 
+  // Lowering ONNX to ZHigh.
   pm.addPass(onnx_mlir::createONNXToZHighPass());
   pm.addNestedPass<func::FuncOp>(onnx_mlir::createShapeInferencePass());
 
@@ -97,16 +145,6 @@ void addONNXToZHighPasses(mlir::PassManager &pm) {
   pm.addNestedPass<func::FuncOp>(onnx_mlir::createShapeInferencePass());
   pm.addPass(mlir::createCanonicalizerPass());
 
-  // Clip zhigh.Stick inputs if required. This is to avoid out-of-range of
-  // dlfloat. Do constant propagation after clipping to remove ONNX ops used for
-  // clipping such as ONNXMax if applicable.
-  // This pass will be removed and replaced by nnpa-saturation in the future.
-  if (!nnpaEnableSaturation && nnpaClipToDLFloatRange) {
-    pm.addNestedPass<func::FuncOp>(
-        onnx_mlir::zhigh::createZHighClipToDLFloatPass());
-    pm.addNestedPass<func::FuncOp>(onnx_mlir::createConstPropONNXToONNXPass());
-  }
-
   // One more call to ONNX shape inference/canonicalization/... to update shape
   // if possible.
   if (enableONNXHybridPass) {
@@ -119,10 +157,6 @@ void addONNXToZHighPasses(mlir::PassManager &pm) {
     pm.addPass(mlir::createCanonicalizerPass());
     pm.addNestedPass<func::FuncOp>(onnx_mlir::createShapeInferencePass());
   }
-
-  // Replace every DisposableElementsAttr with DenseElementsAttr.
-  // ZHighConstPropagation currently assumes that DenseElementsAttr is used.
-  pm.addPass(createScrubDisposablePass());
 
   // Experimental feature: Decompose stick/unstick into two phases: layout
   // transform and data conversion. Do some optimizations after decomposing.
@@ -139,21 +173,23 @@ void addONNXToZHighPasses(mlir::PassManager &pm) {
   // sub, ...) that are of `stick -> light-weight op -> unstick`, it's better to
   // use CPU instead of NNPA to avoid stick/unstick. CPU is efficient to handle
   // these ops, e.g vectorize the computation.
-  if (nnpaEnableZHighToOnnx)
+  if (!nnpaDisableZHighToOnnx)
     pm.addNestedPass<func::FuncOp>(onnx_mlir::createZHighToONNXPass());
 
   // Constant propagation at ZHighIR: constant stickify.
   // Only support BE machines.
   bool isBE = llvm::endianness::native == llvm::endianness::big;
   if (isBE)
-    pm.addNestedPass<func::FuncOp>(
-        onnx_mlir::zhigh::createZHighConstPropagationPass());
+    pm.addPass(onnx_mlir::zhigh::createZHighConstPropagationPass());
 
   // Remove common sub-expressions.
   pm.addPass(mlir::createCSEPass());
 
   // Clean dead code.
   pm.addPass(mlir::createSymbolDCEPass());
+
+  // Replace every DisposableElementsAttr with DenseElementsAttr.
+  pm.addPass(onnx_mlir::zhigh::createZHighScrubDisposablePass());
 
   // Insert an instrumentation after lowering onnx to zhigh to get profiling
   // for onnx and zhigh ops.
@@ -191,11 +227,14 @@ void addPassesNNPA(mlir::OwningOpRef<mlir::ModuleOp> &module,
 
   // Override pass configurations.
   configurePasses();
-  configurePassesNNPA();
 
   // LLVM_DEBUG(llvm::dbgs() << "Adding NNPA passes" << std::endl;);
   if (emissionTarget >= EmitONNXIR) {
-    addONNXToMLIRPasses(pm, /*target CPU*/ maccel.empty());
+    pm.addInstrumentation(
+        std::make_unique<onnx_mlir::zhigh::ZHighDisposableGarbageCollector>(
+            pm.getContext()));
+    addONNXToMLIRPasses(pm, /*target CPU*/ maccel.empty(),
+        /*donotScrubDisposableElementsAttr*/ true);
     pm.addPass(onnx_mlir::createDevicePlacementPass(nnpaLoadDevicePlacementFile,
         nnpaSaveDevicePlacementFile, nnpaPlacementHeuristic));
   }
@@ -221,8 +260,7 @@ void addPassesNNPA(mlir::OwningOpRef<mlir::ModuleOp> &module,
       else if (optStr == "-O3")
         optLevel = OptLevel::O3;
       // Lower ONNX to Krnl, ZHigh to ZLow.
-      addONNXToKrnlPasses(
-          pm, optLevel, /*enableCSE*/ true, instrumentSignatures, ONNXOpStats);
+      addONNXToKrnlPasses(pm, optLevel, /*enableCSE*/ true, ONNXOpStats);
 
       if (nnpaEmissionTarget >= EmitZLowIR)
         emissionTarget = EmitMLIR;
@@ -233,7 +271,7 @@ void addPassesNNPA(mlir::OwningOpRef<mlir::ModuleOp> &module,
         pm.addPass(zlow::createZLowRewritePass());
         // Late generation of code for stick/unstick, needed to be after a
         // ZLowRewrite pass.
-        if (nnpaEnableCompilerStickUnstick)
+        if (!nnpaDisableCompilerStickUnstick)
           pm.addPass(zlow::createZLowStickExpansionPass(enableParallel));
         pm.addPass(mlir::createCanonicalizerPass());
         // Normalize MemRefs.
@@ -243,11 +281,6 @@ void addPassesNNPA(mlir::OwningOpRef<mlir::ModuleOp> &module,
         addKrnlToAffinePasses(pm);
         // Optimizations at ZLow after normalizing MemRefs.
         pm.addPass(zlow::createZLowRewritePass());
-        // The createZLowStickExpansion pass may create parallel constructs,
-        // they need to be handled here.
-        if (nnpaEnableCompilerStickUnstick && enableParallel)
-          pm.addPass(mlir::createConvertSCFToOpenMPPass());
-
         pm.addPass(mlir::createCanonicalizerPass());
         // Constant folding for std.alloc.
         pm.addNestedPass<func::FuncOp>(onnx_mlir::createFoldStdAllocPass());

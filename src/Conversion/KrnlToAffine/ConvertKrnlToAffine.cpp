@@ -814,20 +814,18 @@ AffineTypeConverter::AffineTypeConverter() {
   addConversion([](Type type) { return type; });
 
   addSourceMaterialization([&](OpBuilder &builder, Type resultType,
-                               ValueRange inputs,
-                               Location loc) -> std::optional<Value> {
+                               ValueRange inputs, Location loc) -> Value {
     if (inputs.size() != 1)
-      return std::nullopt;
+      return Value();
 
     return builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs)
         .getResult(0);
   });
 
   addTargetMaterialization([&](OpBuilder &builder, Type resultType,
-                               ValueRange inputs,
-                               Location loc) -> std::optional<Value> {
+                               ValueRange inputs, Location loc) -> Value {
     if (inputs.size() != 1)
-      return std::nullopt;
+      return Value();
 
     return builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs)
         .getResult(0);
@@ -846,11 +844,21 @@ struct ConvertKrnlToAffinePass
     : public PassWrapper<ConvertKrnlToAffinePass, OperationPass<func::FuncOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ConvertKrnlToAffinePass);
 
+  ConvertKrnlToAffinePass() = default;
+  ConvertKrnlToAffinePass(const ConvertKrnlToAffinePass &pass)
+      : PassWrapper<ConvertKrnlToAffinePass, OperationPass<func::FuncOp>>() {}
+  ConvertKrnlToAffinePass(bool parallelEnabled) {
+    this->parallelEnabled = parallelEnabled;
+  }
+
   StringRef getArgument() const override { return "convert-krnl-to-affine"; }
 
   StringRef getDescription() const override { return "Lower Krnl dialect."; }
 
   void runOnOperation() final;
+
+  Option<bool> parallelEnabled{*this, "parallel-enabled",
+      llvm::cl::desc("Enable parallelization"), llvm::cl::init(false)};
 };
 
 void ConvertKrnlToAffinePass::runOnOperation() {
@@ -1010,7 +1018,7 @@ void ConvertKrnlToAffinePass::runOnOperation() {
   RewritePatternSet patterns(ctx);
   AffineTypeConverter typeConverter;
 
-  populateKrnlToAffineConversion(typeConverter, patterns, ctx);
+  populateKrnlToAffineConversion(typeConverter, patterns, ctx, parallelEnabled);
 
   // Create list for recording the <loop, unroll factor> pairs associated with
   // this function.
@@ -1048,8 +1056,12 @@ std::unique_ptr<Pass> createConvertKrnlToAffinePass() {
   return std::make_unique<ConvertKrnlToAffinePass>();
 }
 
+std::unique_ptr<Pass> createConvertKrnlToAffinePass(bool parallelEnabled) {
+  return std::make_unique<ConvertKrnlToAffinePass>(parallelEnabled);
+}
+
 void populateKrnlToAffineConversion(TypeConverter &typeConverter,
-    RewritePatternSet &patterns, MLIRContext *ctx) {
+    RewritePatternSet &patterns, MLIRContext *ctx, bool parallelEnabled) {
   krnl::populateLoweringKrnlCopyFromBufferOpPattern(
       typeConverter, patterns, ctx);
   krnl::populateLoweringKrnlCopyToBufferOpPattern(typeConverter, patterns, ctx);
@@ -1057,7 +1069,8 @@ void populateKrnlToAffineConversion(TypeConverter &typeConverter,
   krnl::populateLoweringKrnlStoreOpPattern(typeConverter, patterns, ctx);
   krnl::populateLoweringKrnlGetLinearOffsetIndexOpPattern(
       typeConverter, patterns, ctx);
-  krnl::populateLoweringKrnlMatmultOpPattern(typeConverter, patterns, ctx);
+  krnl::populateLoweringKrnlMatmultOpPattern(
+      typeConverter, patterns, ctx, parallelEnabled);
   krnl::populateLoweringKrnlMemsetOpPattern(typeConverter, patterns, ctx);
   krnl::populateLoweringKrnlPrefetchOpPattern(typeConverter, patterns, ctx);
   krnl::populateLoweringKrnlTerminatorOpPattern(typeConverter, patterns, ctx);

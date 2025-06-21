@@ -77,6 +77,19 @@ Type getReturnTypeForMatMulOpND2D(Value A, Value B) {
       resShape, mlir::cast<ShapedType>(A.getType()).getElementType());
 }
 
+// Get return type for a MaxPoolOp assuming input is 4D NCHW.
+Type getReturnTypeForMaxPool2D(Value input) {
+  auto inputType = mlir::cast<RankedTensorType>(input.getType());
+  return UnrankedTensorType::get(inputType.getElementType());
+}
+
+bool isNotConvProducer(mlir::Value val) {
+  if (auto defOp = val.getDefiningOp()) {
+    return !llvm::isa<mlir::ONNXConvOp>(defOp);
+  }
+  return true; // If no defining op, assume it's safe
+}
+
 // Get the index of the axis value in the given permutation array.
 IntegerAttr getIndexOfAxisInPerm(
     PatternRewriter &rewriter, ArrayAttr permAttr, IntegerAttr axis) {
@@ -127,6 +140,28 @@ bool areProducedByTransposeOp(ValueRange values) {
       return false;
     return isa<ONNXTransposeOp>(v.getDefiningOp());
   });
+}
+
+Value maxOrDefault(PatternRewriter &rewriter, Location loc, Value a, Value b) {
+  // If A or B is NoneType, return the other value
+  if (mlir::isa<NoneType>(a.getType()))
+    return b;
+  if (mlir::isa<NoneType>(b.getType()))
+    return a;
+
+  // Otherwise, return the max of A and B
+  return rewriter.create<ONNXMaxOp>(loc, a.getType(), ValueRange{a, b});
+}
+
+Value minOrDefault(PatternRewriter &rewriter, Location loc, Value a, Value b) {
+  // If A or B is NoneType, return the other value
+  if (mlir::isa<NoneType>(a.getType()))
+    return b;
+  if (mlir::isa<NoneType>(b.getType()))
+    return a;
+
+  // Otherwise, return the min of A and B
+  return rewriter.create<ONNXMinOp>(loc, a.getType(), ValueRange{a, b});
 }
 
 // Create a DenseElementsAttr based on the shape of type.
@@ -202,11 +237,7 @@ bool haveSameStaticShape(Value lhs, Value rhs) {
 
 /// Test if the input is a splat constant with a negative value or not.
 bool isNegativeSplatConstant(Value val) {
-  if (!isDenseONNXConstant(val))
-    return false;
-  ONNXConstantOp constOp = val.getDefiningOp<ONNXConstantOp>();
-  auto valAttr =
-      llvm::dyn_cast_or_null<DenseElementsAttr>(constOp.getValueAttr());
+  ElementsAttr valAttr = getElementAttributeFromONNXValue(val);
   if (!valAttr)
     return false;
 
@@ -224,6 +255,29 @@ bool isNegativeSplatConstant(Value val) {
   return false;
 }
 
+/// Test if the input is a constant with all negative small value or not.
+// This function assumes input constant value(`val`) is dimension size. So, set
+// 10 as the size of small constnt value.
+bool isAllNegativeSmallIntegerConstant(Value val) {
+  ElementsAttr valAttr = getElementAttributeFromONNXValue(val);
+  if (!valAttr)
+    return false;
+
+  if (valAttr.size() > 10)
+    return false;
+
+  Type elemTy = mlir::cast<ShapedType>(val.getType()).getElementType();
+  if (mlir::isa<IntegerType>(elemTy)) {
+    for (auto v : valAttr.getValues<APInt>()) {
+      if (v.getSExtValue() > 0)
+        return false;
+    }
+  } else {
+    return false;
+  }
+  return true;
+}
+
 /// Test if all values in the input ValueRange are dimension sizes.
 bool areAllDimSizes(ValueRange vals) {
   return llvm::all_of(vals, [](Value val) {
@@ -238,9 +292,7 @@ bool areAllDimSizes(ValueRange vals) {
       Type elemTy = mlir::cast<ShapedType>(val.getType()).getElementType();
       if (!mlir::isa<IntegerType>(elemTy))
         return false;
-      ONNXConstantOp constOp = val.getDefiningOp<ONNXConstantOp>();
-      auto valAttr =
-          llvm::dyn_cast_or_null<DenseElementsAttr>(constOp.getValueAttr());
+      ElementsAttr valAttr = getElementAttributeFromONNXValue(val);
       if (!valAttr)
         return false;
       int64_t v = (*valAttr.getValues<APInt>().begin()).getSExtValue();
@@ -749,12 +801,9 @@ private:
   bool isDefinedByIntegerConstantOp(Value v) const {
     if (mlir::isa<BlockArgument>(v))
       return false;
-    Operation *definingOp = v.getDefiningOp();
     if (mlir::isa<IntegerType>(
             mlir::cast<ShapedType>(v.getType()).getElementType()) &&
-        isa<ONNXConstantOp>(definingOp) &&
-        mlir::isa<DenseElementsAttr>(
-            mlir::cast<ONNXConstantOp>(definingOp).getValueAttr()))
+        isDenseONNXConstant(v))
       return true;
     return false;
   }
@@ -795,10 +844,8 @@ private:
 
   // A helper function to get an integer constant from a value.
   int64_t getOneIntegerConstant(Value v) const {
-    Operation *definingOp = v.getDefiningOp();
-    DenseElementsAttr valueAttr = mlir::cast<DenseElementsAttr>(
-        mlir::cast<ONNXConstantOp>(definingOp).getValueAttr());
-    return (*valueAttr.getValues<APInt>().begin()).getSExtValue();
+    return onnx_mlir::getScalarValue<int64_t>(
+        v.getDefiningOp<ONNXConstantOp>());
   }
 
   // A helper function to match the pattern of the given operation. It also
@@ -1192,6 +1239,53 @@ private:
   int64_t maxPower;
 };
 
+class PowConversionRewritePattern : public OpRewritePattern<ONNXPowOp> {
+public:
+  using OpRewritePattern<ONNXPowOp>::OpRewritePattern;
+
+  PowConversionRewritePattern(MLIRContext *context, int64_t maxPower)
+      : OpRewritePattern(context) {}
+
+  LogicalResult matchAndRewrite(
+      ONNXPowOp powOp, PatternRewriter &rewriter) const override {
+    Operation *op = powOp.getOperation();
+    Location loc = powOp.getLoc();
+    Value input = powOp.getX();
+    Value exp = powOp.getY();
+
+    // Characterize element types.
+    Type inputElementType = getElementTypeOrSelf(input);
+    Type expElementType = getElementTypeOrSelf(exp);
+    bool inputIsInt = isa<IntegerType>(inputElementType);
+    bool inputIsFloat = isa<FloatType>(inputElementType);
+    bool expIsInt = isa<IntegerType>(expElementType);
+    bool expIsFloat = isa<FloatType>(expElementType);
+    // Since verifier make sure we only have int or float, can use call below.
+    int64_t inputWidth = inputElementType.getIntOrFloatBitWidth();
+    int64_t expWidth = expElementType.getIntOrFloatBitWidth();
+
+    // Detect cases that MLIR supports without conversions => failure, aka no
+    // need to do anything here.
+    if ((inputWidth == expWidth) &&
+        ((inputIsInt && expIsInt) || (inputIsFloat && expIsFloat) ||
+            (inputIsFloat && expIsInt)))
+      return failure();
+
+    // Rewrite pow with a cast of the exp type to the input type
+    // TODO: Standard is fuzzy on how to handle conversions in mix type
+    // situations. We should revisit this code if the standard change from the
+    // currently (unofficial, aka ORT) policy which is simply to convert the
+    // exponenet to the type of the base & output. This is especially
+    // "questionable" when the base is an integer type and the exponent is a
+    // float, as 0.5 could express a square root operation.
+    MultiDialectBuilder<OnnxBuilder> create(rewriter, loc);
+    Value newExp = create.onnx.cast(exp, inputElementType);
+    Value newPow = create.onnx.pow(input, newExp);
+    rewriter.replaceOp(op, {newPow});
+    return success();
+  }
+};
+
 // Rewrite a pattern like the following:
 //
 // %shape = onnx.Concat(%dim1, %dim2)
@@ -1478,6 +1572,65 @@ private:
 };
 
 // =============================================================================
+// Rewrite pattern concat
+// =============================================================================
+
+struct RecomposeConcatPattern : public OpRewritePattern<ONNXConcatOp> {
+  using OpRewritePattern<ONNXConcatOp>::OpRewritePattern;
+
+  // Helper function to check if an input is a mergeable Concat.
+  static bool isMergeableConcat(Value input, int64_t axis) {
+    ONNXConcatOp concatOp = input.getDefiningOp<ONNXConcatOp>();
+    if (!concatOp)
+      return false;
+    return (concatOp.getAxis() == axis) && (concatOp.getResult().hasOneUse());
+  }
+
+  LogicalResult matchAndRewrite(
+      ONNXConcatOp concatOp, PatternRewriter &rewriter) const final {
+    ValueRange inputs = concatOp.getOperands();
+    int64_t axis = concatOp.getAxis();
+
+    // If there is only a single input, replace the concat with that input.
+    if (inputs.size() == 1) {
+      rewriter.replaceOp(concatOp, inputs[0]);
+      return success();
+    }
+
+    SmallVector<Value, 16> newInputs;
+    bool merged = false;
+    SmallVector<Location> concatLocations;
+    concatLocations.push_back(concatOp->getLoc());
+
+    // Flatten nested concat nodes.
+    for (Value input : inputs) {
+      if (isMergeableConcat(input, axis)) {
+        // Remove the nested concat and append its inputs.
+        ONNXConcatOp innerConcat = cast<ONNXConcatOp>(input.getDefiningOp());
+        newInputs.append(
+            innerConcat.getOperands().begin(), innerConcat.getOperands().end());
+        concatLocations.push_back(innerConcat->getLoc());
+        merged = true;
+      } else {
+        // Push non-mergeable input.
+        newInputs.push_back(input);
+      }
+    }
+
+    if (merged) {
+      // Create a new ONNXConcat op with the flattened inputs.
+      auto newConcat =
+          rewriter.create<ONNXConcatOp>(rewriter.getFusedLoc(concatLocations),
+              concatOp.getResult().getType(), newInputs, axis);
+      rewriter.replaceOp(concatOp, newConcat.getResult());
+      return success();
+    }
+
+    return failure();
+  }
+};
+
+// =============================================================================
 // Rewrite pattern LayerNormalization
 // =============================================================================
 
@@ -1544,6 +1697,384 @@ private:
 };
 
 // =============================================================================
+// Rewrite pattern for Where
+// =============================================================================
+
+class RemoveWhereEqualPattern : public OpRewritePattern<ONNXWhereOp> {
+public:
+  using OpRewritePattern<ONNXWhereOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(
+      ONNXWhereOp onnxWhereOp, PatternRewriter &rewriter) const override {
+    Location loc = onnxWhereOp.getLoc();
+    onnx_mlir::OnnxBuilder create(rewriter, loc);
+    // Check operation pattern:
+    // (ONNXWhereOp
+    //     (ONNXEqualOp (ONNXConcatOp), (ONNXConstantOp)),
+    //      (ONNXConstantOp),
+    //      (ONNXConcatOp))
+    // - The second input of EqualOp need to be all negative values.
+    // - The output need to be integer type.
+    // - Has shape and rank.
+    // - DefiningOp of operands of ONNXConcatOp need to be DimOp or ConstantOp
+    // with scalar tensor
+    // - Operands in ONNXConcatOp need to be DimOp or ConstantOp
+
+    // Check if the condition of WhereOp matches EqualOp, the X of it matches
+    // ConstantOp, and the Y of it matches ConcatOp.
+    Operation *equalOp, *constantOp, *concatOp;
+    Value equalOpResVal, constantOpResVal, concatOpResVal;
+    bool isEqualOp = operandOfOpDefinedBy<ONNXEqualOp>(
+        equalOp, onnxWhereOp.getOperation(), equalOpResVal, 0);
+    bool isConstantOp = operandOfOpDefinedBy<ONNXConstantOp>(
+        constantOp, onnxWhereOp.getOperation(), constantOpResVal, 1);
+    bool isConcatOp = operandOfOpDefinedBy<ONNXConcatOp>(
+        concatOp, onnxWhereOp.getOperation(), concatOpResVal, 2);
+    if (!isEqualOp || !isConstantOp || !isConcatOp)
+      return failure();
+    // Check if operands of the EqualOp are ConcatOp and ConstantOp.
+    Value equalOpConstVal, equalOpConcatVal;
+    bool isConcatAndConstOp =
+        areDefinedBy<ONNXConcatOp, ONNXConstantOp>(equalOp->getOperand(0),
+            equalOp->getOperand(1), equalOpConcatVal, equalOpConstVal);
+    if (!isConcatAndConstOp)
+      return failure();
+
+    if (!hasShapeAndRank(equalOpConcatVal) ||
+        !hasShapeAndRank(equalOpConstVal) || !hasShapeAndRank(concatOpResVal)) {
+      return failure(); // Cannot apply pattern until ranks are known.
+    }
+
+    if (!isAllNegativeSmallIntegerConstant(equalOpConstVal))
+      return failure();
+
+    // Get attribute of constantOp, an operand of equal op (Negative values)
+    SmallVector<int64_t> constAttrValues;
+    if (!getI64ValuesFromONNXConstantOp(equalOpConstVal, constAttrValues))
+      return failure();
+    // Get attriubte of concatOp, an operand of equal op, and calculate the
+    // result of the equalOp
+    ValueRange concatOperands = concatOp->getOperands();
+    llvm::SmallVector<bool, 1> equalOpResults;
+    for (uint64_t i = 0; i < concatOperands.size(); ++i) {
+      // Block arguments.
+      if (mlir::isa<BlockArgument>(concatOperands[i]))
+        return failure();
+      if (concatOperands[i].getDefiningOp<ONNXDimOp>()) {
+        // The value defined by DimOp is not negative value. So, results is
+        // always false.
+        equalOpResults.emplace_back(false);
+      } else if (isDenseONNXConstant(concatOperands[i]) &&
+                 isScalarTensor(concatOperands[i])) {
+        // Compare the attributes to create results of the EqualOp.
+        SmallVector<int64_t> concatAttrValues;
+        if (!getI64ValuesFromONNXConstantOp(
+                concatOperands[i], concatAttrValues))
+          return failure();
+        int64_t a = concatAttrValues.front();
+        int64_t b = constAttrValues[i];
+        equalOpResults.emplace_back(a == b);
+      } else {
+        return failure();
+      }
+    }
+    // Create new concatOp by selecting X or Y of whereOp depending on the
+    // result of equalOp.
+    SmallVector<int64_t> valueX;
+    if (!getI64ValuesFromONNXConstantOp(constantOpResVal, valueX))
+      return failure();
+    SmallVector<Value, 4> resVals;
+    for (uint64_t i = 0; i < equalOpResults.size(); ++i) {
+      if (equalOpResults[i]) {
+        // ConstOp in X of WhereOp
+        resVals.emplace_back(create.constantInt64({valueX[i]}));
+      } else {
+        // ConcatOp in Y of WhereOp
+        resVals.emplace_back(concatOperands[i]);
+      }
+    }
+    Value replacingValue = onnxWhereOp.getResult();
+    ShapedType replacingType = mlir::cast<ShapedType>(replacingValue.getType());
+    Value res = create.concat(replacingType, ValueRange(resVals), /*axis*/ 0);
+    rewriter.replaceOp(onnxWhereOp, res);
+    return success();
+  }
+};
+
+// =============================================================================
+// Rewrite pattern for Instance Normalization
+// =============================================================================
+
+struct RemoveInstanceNormPattern
+    : public OpRewritePattern<ONNXInstanceNormalizationOp> {
+  using OpRewritePattern<ONNXInstanceNormalizationOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ONNXInstanceNormalizationOp instanceNormOp,
+      PatternRewriter &rewriter) const final {
+    // Match.
+    Value input = instanceNormOp.getInput();
+    if (!onnx_mlir::isRankedShapedType(input.getType()))
+      return failure();
+
+    // Get info.
+    Value scale = instanceNormOp.getScale();
+    Value bias = instanceNormOp.getB();
+    ShapedType inputType = mlir::cast<ShapedType>(input.getType());
+    Type elementType = inputType.getElementType();
+    auto inputShape = inputType.getShape();
+    int64_t C = inputShape[1];
+    int64_t inputRank = inputType.getRank();
+    int64_t nonSpacialRank = 2; //  Batch N and Channel C: 2 dimensions.
+    assert(inputRank > nonSpacialRank &&
+           "expected instance norm with input ranks > 2");
+
+    // Rewrite.
+    onnx_mlir::MultiDialectBuilder<onnx_mlir::OnnxBuilder> create(
+        rewriter, instanceNormOp.getLoc());
+    int64_t axis = nonSpacialRank;
+    int64_t numInNorm = inputRank - axis;
+    // Unsqueeze scale/bias from [C] to [C x 1 x 1 x ... x 1] with numInNorm 1s.
+    llvm::SmallVector<int64_t, 4> axesList, biasScaleShape;
+    biasScaleShape.emplace_back(C);
+    for (int64_t i = 1; i <= numInNorm; ++i) {
+      biasScaleShape.emplace_back(1);
+      axesList.emplace_back(i);
+    }
+    Value axes = create.onnx.constantInt64(axesList);
+    Type biasScaleType = RankedTensorType::get(biasScaleShape, elementType);
+    Value newScale = create.onnx.unsqueeze(biasScaleType, scale, axes);
+    Value newBias = create.onnx.unsqueeze(biasScaleType, bias, axes);
+    // Create output using layer norm.
+    Value Y = create.onnx.layerNorm(inputType, input, newScale, newBias, axis,
+        instanceNormOp.getEpsilonAttr());
+    // Set the type of the output to be the same as the output of the original
+    // operation we are trying to replace.
+    Y.setType(instanceNormOp.getResult().getType());
+    // Replace operation.
+    rewriter.replaceOp(instanceNormOp, Y);
+    return success();
+  }
+};
+
+// =============================================================================
+// Rewrite pattern for Group Normalization
+// =============================================================================
+
+template <typename OP>
+constexpr bool scaleAndBiasWithNumGroupShape =
+    std::is_same_v<OP, ONNXGroupNormalizationV18Op>;
+
+template <typename OP_TYPE>
+LogicalResult ONNXGroupNormalizationCommon(
+    OP_TYPE groupNormOp, PatternRewriter &rewriter) {
+
+  // Match.
+  Value input = groupNormOp.getX();
+  if (!onnx_mlir::isRankedShapedType(input.getType()))
+    return failure();
+
+  // Get info.
+  Value scale = groupNormOp.getScale();
+  Value bias = groupNormOp.getBias();
+  ShapedType inputType = mlir::cast<ShapedType>(input.getType());
+  Type elementType = inputType.getElementType();
+  auto inputShapeVal = inputType.getShape();
+  int64_t C = inputShapeVal[1];
+  int64_t inputRank = inputType.getRank();
+  int64_t nonSpacialRank = 2; //  Batch N and Channel C: 2 dimensions.
+  assert(inputRank > nonSpacialRank &&
+         "expected instance norm with input ranks > 2");
+  int64_t spacialRank = inputRank - nonSpacialRank;
+  int64_t layerNormRank = inputRank + 1; // +1 as C is split to NG and C/NG
+  int64_t numGroups = groupNormOp.getNumGroups();
+
+  // Rewrite.
+  onnx_mlir::MultiDialectBuilder<onnx_mlir::OnnxBuilder> create(
+      rewriter, groupNormOp.getLoc());
+  int64_t axis = nonSpacialRank;
+  int64_t numInNorm = layerNormRank - axis;
+  Type biasScaleType;
+  Value axes;
+  Value newBias;
+  Value newScale;
+
+  //"numgroups" and "C" should have the same dimension index
+  llvm::SmallVector<int64_t, 4> axesList, biasScaleVal;
+
+  if constexpr (scaleAndBiasWithNumGroupShape<OP_TYPE>) {
+    // Opset18 Uses "numgroups" the number of groups of channels for the scale
+    // and bias
+    // Unsqueeze scale/bias from [NG] to [1 x NG x 1 x ... x 1] with numInNorm
+    // 1s.
+    biasScaleVal.emplace_back(numGroups);
+    for (int64_t i = 1; i <= numInNorm; ++i) {
+      biasScaleVal.emplace_back(1);
+      axesList.emplace_back(i);
+    }
+
+    axes = create.onnx.constantInt64(axesList);
+    biasScaleType = RankedTensorType::get(biasScaleVal, elementType);
+    newScale = create.onnx.unsqueeze(biasScaleType, scale, axes);
+    newBias = create.onnx.unsqueeze(biasScaleType, bias, axes);
+  } else {
+    // Opset21 Uses "C" the number of channels for the scale and bias
+    // The equivalent of "C" when split is "NG x C/NG"
+    // Reshape scale/bias from [C] to [NG x C/NG x 1 x ... x 1] with numInNorm
+    // 1s.
+    biasScaleVal.emplace_back(numGroups);
+    // C can be a dynamic or static value, account for that here
+    if (C != ShapedType::kDynamic) {
+      assert(C % numGroups == 0 && "expected numGroups to divide C");
+      biasScaleVal.emplace_back(C / numGroups);
+    } else {
+      biasScaleVal.emplace_back(ShapedType::kDynamic);
+    }
+
+    for (int64_t i = 2; i <= numInNorm; ++i) {
+      biasScaleVal.emplace_back(1);
+    }
+
+    // Calculate the (possible) dynamic dimensions for biasScaleShape
+    Value NGShape = create.onnx.constantInt64({numGroups});
+    Value oneDimShape =
+        create.onnx.constantInt64(SmallVector<int64_t>(spacialRank, 1));
+    Type biasScaleShapeType =
+        RankedTensorType::get({inputRank}, rewriter.getI64Type());
+    Value biasScaleShape = create.onnx.concat(
+        biasScaleShapeType, {NGShape, NGShape, oneDimShape}, /*axis*/ 0);
+
+    // Reshape instead of unsqueeze (use biasScaleShape)
+    biasScaleType = RankedTensorType::get(biasScaleVal, elementType);
+    newScale = create.onnx.reshape(biasScaleType, scale, biasScaleShape);
+    newBias = create.onnx.reshape(biasScaleType, bias, biasScaleShape);
+  }
+
+  // Convert input from N x C x D1...Dn to N x (NG x C/NG) x D1...Dn.
+  // First compute the new (possible dynamic) shape.
+  Type batchShapeType = RankedTensorType::get({1}, rewriter.getI64Type());
+  Value NShape = create.onnx.shape(
+      batchShapeType, input, /*start*/ 0, /*exclusive end*/ 1);
+  Value NGandMin1Shape = create.onnx.constantInt64({numGroups, -1});
+  Type spacialShapeType =
+      RankedTensorType::get({spacialRank}, rewriter.getI64Type());
+  Value spacialShape =
+      create.onnx.shape(spacialShapeType, input, /*start*/ nonSpacialRank);
+  Type layerNormShapeType =
+      RankedTensorType::get({layerNormRank}, rewriter.getI64Type());
+  Value layerNormShape = create.onnx.concat(layerNormShapeType,
+      {NShape, NGandMin1Shape, spacialShape}, /*axis*/
+      0);
+  // Compute type of converted input.
+  llvm::SmallVector<int64_t, 5> layerNormShapeVal;
+  // Create a new tensor with the following dimensions: N, NG, C/NG, D1, D2,
+  // Dn...
+  layerNormShapeVal.emplace_back(inputShapeVal[0]); // N
+  layerNormShapeVal.emplace_back(numGroups);        // NG
+  if (C != ShapedType::kDynamic) {
+    assert(C % numGroups == 0 && "expected numGroups to divide C");
+    layerNormShapeVal.emplace_back(C / numGroups); // (C/NG)
+  } else
+    layerNormShapeVal.emplace_back(ShapedType::kDynamic);
+  for (int64_t i = 0; i < spacialRank; ++i)
+    layerNormShapeVal.emplace_back(inputShapeVal[nonSpacialRank + i]); // Dn
+  RankedTensorType layerNormInputType =
+      RankedTensorType::get(layerNormShapeVal, elementType);
+  Value layerNormInput =
+      create.onnx.reshape(layerNormInputType, input, layerNormShape);
+  // Create output using layer norm.
+  Value layerNormY = create.onnx.layerNorm(layerNormInputType, layerNormInput,
+      newScale, newBias, axis, groupNormOp.getEpsilonAttr());
+  // Resize output to original size
+  Type inputShapeType =
+      RankedTensorType::get({inputRank}, rewriter.getI64Type());
+  Value inputShape = create.onnx.shape(inputShapeType, input);
+  Type outputType = groupNormOp.getY().getType();
+  Value Y = create.onnx.reshape(outputType, layerNormY, inputShape);
+  // Set the type of the output to be the same as the output of the original
+  // operation we are trying to replace.
+  Y.setType(groupNormOp.getResult().getType());
+  // Replace operation.
+  rewriter.replaceOp(groupNormOp, Y);
+  return success();
+}
+
+struct RemoveGroupNormPattern1
+    : public OpRewritePattern<ONNXGroupNormalizationOp> {
+  using OpRewritePattern<ONNXGroupNormalizationOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ONNXGroupNormalizationOp groupNormOp,
+      PatternRewriter &rewriter) const final {
+    return ONNXGroupNormalizationCommon<ONNXGroupNormalizationOp>(
+        groupNormOp, rewriter);
+  }
+};
+
+struct RemoveGroupNormPattern2
+    : public OpRewritePattern<ONNXGroupNormalizationV18Op> {
+  using OpRewritePattern<ONNXGroupNormalizationV18Op>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ONNXGroupNormalizationV18Op groupNormOp,
+      PatternRewriter &rewriter) const final {
+    return ONNXGroupNormalizationCommon<ONNXGroupNormalizationV18Op>(
+        groupNormOp, rewriter);
+  }
+};
+
+// =============================================================================
+// Rewrite pattern for ONNXTransposeOp
+// =============================================================================
+
+// Handle negative permute pattern here as they are used in many many places.
+// Added also the default where no permute is given.
+// Still had to also handle them in shape inference
+class HandleNegativePermutePatternInTranspose
+    : public OpRewritePattern<ONNXTransposeOp> {
+public:
+  using OpRewritePattern<ONNXTransposeOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ONNXTransposeOp onnxTransposeOp,
+      PatternRewriter &rewriter) const override {
+    Location loc = onnxTransposeOp.getLoc();
+    onnx_mlir::OnnxBuilder create(rewriter, loc);
+
+    Value data = onnxTransposeOp.getData();
+    if (!hasShapeAndRank(data))
+      return failure();
+    // Get rank and permutation attribute, if any.
+    int64_t rank = mlir::cast<ShapedType>(data.getType()).getRank();
+    auto permAttr = onnxTransposeOp.getPermAttr();
+
+    if (!permAttr) {
+      // No Permute, default to reverse order.
+      SmallVector<int64_t, 4> defaultPerm;
+      for (int64_t i = rank - 1; i >= 0; --i)
+        defaultPerm.emplace_back(i);
+      Value res = create.transposeInt64(data, defaultPerm);
+      rewriter.replaceOp(onnxTransposeOp, res);
+      return success();
+    }
+
+    bool hasNegativePermVal = false;
+    SmallVector<int64_t, 4> newPerm;
+    for (int64_t i = 0; i < rank; ++i) {
+      int64_t p = ArrayAttrIntVal(permAttr, i);
+      if (p < 0) {
+        hasNegativePermVal = true;
+        p += rank;
+      }
+      newPerm.emplace_back(p);
+    }
+    // No negative value, no need to canonicalize.
+    if (!hasNegativePermVal)
+      return failure();
+    // Had a negative number, replace the transpose.
+    Value res = create.transposeInt64(data, newPerm);
+    rewriter.replaceOp(onnxTransposeOp, res);
+    return success();
+  }
+};
+
+// =============================================================================
 /// Register optimization patterns as "canonicalization" patterns.
 /// Add op to OpsWithCanonicalizer in gen_onnx_mlir.py to activate.
 /// Please keep in alphabetical order.
@@ -1590,6 +2121,18 @@ void ONNXCastOp::getCanonicalizationPatterns(
   result.insert<SwapCastSlicePattern>(context);
   // TODO: Reintroduce pattern for sound type combinations, see issue #2210.
   // result.insert<FuseCastCastPattern>(context);
+}
+
+/// on the ONNXConcatOp.
+void ONNXConcatOp::getCanonicalizationPatterns(
+    RewritePatternSet &results, MLIRContext *context) {
+  results.insert<RecomposeConcatPattern>(context);
+}
+
+/// on the ONNXClipOp.
+void ONNXClipOp::getCanonicalizationPatterns(
+    RewritePatternSet &results, MLIRContext *context) {
+  results.insert<FuseConsecutiveClipsPattern>(context);
 }
 
 /// on the ONNXConstantOp.
@@ -1648,6 +2191,17 @@ void ONNXGreaterOp::getCanonicalizationPatterns(
   result.insert<BinaryOpBroadcastAxisPattern<ONNXGreaterOp>>(context);
 }
 
+/// on the ONNXGroupNormalizationOp and derivatives.
+void ONNXGroupNormalizationOp::getCanonicalizationPatterns(
+    RewritePatternSet &result, MLIRContext *context) {
+  result.insert<RemoveGroupNormPattern1>(context);
+}
+
+void ONNXGroupNormalizationV18Op::getCanonicalizationPatterns(
+    RewritePatternSet &result, MLIRContext *context) {
+  result.insert<RemoveGroupNormPattern2>(context);
+}
+
 /// on the ONNXGRUOp.
 void ONNXGRUOp::getCanonicalizationPatterns(
     RewritePatternSet &results, MLIRContext *context) {
@@ -1659,6 +2213,12 @@ void ONNXGRUOp::getCanonicalizationPatterns(
 void ONNXIdentityOp::getCanonicalizationPatterns(
     RewritePatternSet &results, MLIRContext *context) {
   results.insert<IdentityEliminationPattern>(context);
+}
+
+/// on the ONNXInstanceNormalizationOp.
+void ONNXInstanceNormalizationOp::getCanonicalizationPatterns(
+    RewritePatternSet &results, MLIRContext *context) {
+  results.insert<RemoveInstanceNormPattern>(context);
 }
 
 /// on the ONNXLayoutTransformOp.
@@ -1686,6 +2246,12 @@ void ONNXLSTMOp::getCanonicalizationPatterns(
     RewritePatternSet &results, MLIRContext *context) {
   results.insert<RNNOpRewriteLayoutPattern<ONNXLSTMOp>>(context);
   results.insert<RNNOpRewriteSeqLenPattern<ONNXLSTMOp>>(context);
+}
+
+/// on the ONNXMaxPoolSingleOutOp.
+void ONNXMaxPoolSingleOutOp::getCanonicalizationPatterns(
+    RewritePatternSet &results, MLIRContext *context) {
+  results.insert<ReorderReluMaxPoolPattern>(context);
 }
 
 /// on the ONNXMulOp.
@@ -1826,6 +2392,7 @@ void ONNXTransposeOp::getCanonicalizationPatterns(
   result.insert<FuseTransposeAndTanhPattern>(context);
   result.insert<RemoveIdentityTransposePattern>(context);
   result.insert<SwapTransposeConcatPattern>(context);
+  result.insert<HandleNegativePermutePatternInTranspose>(context);
 }
 
 /// on the ONNXUnsqueezeOp.
@@ -1847,6 +2414,7 @@ void ONNXPowOp::getCanonicalizationPatterns(
   // Is 64 necessary? Maybe too high?
   result.insert<PowToMulRewritePattern>(context, 64);
   result.insert<BinaryOpBroadcastAxisPattern<ONNXPowOp>>(context);
+  result.insert<PowConversionRewritePattern>(context);
 }
 
 /// on the ONNXXorOp.
@@ -1859,6 +2427,7 @@ void ONNXXorOp::getCanonicalizationPatterns(
 void ONNXWhereOp::getCanonicalizationPatterns(
     RewritePatternSet &result, MLIRContext *context) {
   result.insert<AlwaysFalseWherePattern>(context);
+  result.insert<RemoveWhereEqualPattern>(context);
 }
 
 // on the ONNXDequantizeLinearOp.

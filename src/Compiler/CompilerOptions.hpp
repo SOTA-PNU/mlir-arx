@@ -4,7 +4,7 @@
 
 //===------------------------ CompilerOptions.hpp -------------------------===//
 //
-// Copyright 2022-2024 The IBM Research Authors.
+// Copyright 2022-2025 The IBM Research Authors.
 //
 // =============================================================================
 //
@@ -14,6 +14,7 @@
 
 #ifndef ONNX_MLIR_COMPILER_OPTIONS_H
 #define ONNX_MLIR_COMPILER_OPTIONS_H
+
 #include "onnx-mlir/Compiler/OMCompilerTypes.h"
 #include "src/Accelerators/Accelerator.hpp"
 #include "llvm/Support/CommandLine.h"
@@ -78,6 +79,7 @@ extern std::vector<accel::Accelerator::Kind> maccel;          // common for both
 extern OptLevel OptimizationLevel;                            // common for both
 extern std::string mtriple;                                   // common for both
 extern std::string mcpu;                                      // common for both
+extern float nnpaEpsilon;                                     // common for both
 extern std::string march;                                     // common for both
 extern InstrumentStages instrumentStage;                      // common for both
 extern bool onnxConstPropRoundFPToInt;                        // common for both
@@ -89,7 +91,10 @@ extern std::string opsForCall;                                // common for both
 extern bool disableKrnlOpFusion;                              // common for both
 extern bool disableQuantZeroPoint;                            // common for both
 extern bool enableKrnlBufferReuse;                            // common for both
+extern bool enableSafeCodeGen;                                // common for both
 extern bool disableMemRefPrefetch;                            // common for both
+extern uint64_t compilationNumThreads;                        // common for both
+extern std::vector<std::string> decomposeOpsInONNX;           // common for both
 extern EmissionTargetType emissionTarget;                     // onnx-mlir only
 extern bool invokeOnnxVersionConverter;                       // onnx-mlir only
 extern bool preserveLocations;                                // onnx-mlir only
@@ -97,6 +102,7 @@ extern bool printIR;                                          // onnx-mlir only
 extern bool preserveBitcode;                                  // onnx-mlir only
 extern bool preserveLLVMIR;                                   // onnx-mlir only
 extern bool preserveMLIR;                                     // onnx-mlir only
+extern bool doNotEmitFullMLIRCode;                            // onnx-mlir only
 extern bool useOnnxModelTypes;                                // onnx-mlir only
 extern int repeatOnnxTransform;                               // onnx-mlir only
 extern std::string shapeInformation;                          // onnx-mlir only
@@ -113,6 +119,7 @@ extern std::string instrumentOps;                             // onnx-mlir only
 extern unsigned instrumentControlBits;                        // onnx-mlir only
 extern std::string parallelizeOps;                            // onnx-mlir only
 extern std::string instrumentSignatures;                      // onnx-mlir only
+extern std::string instrumentOnnxNode;                        // onnx-mlir only
 extern std::string ONNXOpStats;                               // onnx-mlir only
 extern int onnxOpTransformThreshold;                          // onnx-mlir only
 extern bool onnxOpTransformReport;                            // onnx-mlir only
@@ -132,7 +139,6 @@ extern std::vector<std::string> extraLibPaths;                // onnx-mlir only
 extern std::vector<std::string> extraLibs;                    // onnx-mlir only
 extern ProfileIRs profileIR;                                  // onnx-mlir only
 extern OptReport optReport;                                   // onnx-mlir only
-extern bool useOldBufferization;                              // onnx-mlir only
 extern bool enableTiming;                                     // onnx-mlir only
 extern bool enableBoundCheck;                                 // onnx-mlir only
 extern bool debugTestCompilerOpt;                             // onnx-mlir only
@@ -158,11 +164,13 @@ std::string getTargetTripleOption();
 
 void setTargetArch(const std::string &arch);
 void clearTargetArch();
-std::string getTargetArchOption();
+int64_t getZArchNum(const std::string &arch, const std::string cpu);
+std::string getTargetArchOption(bool forLLVMToolchain = false);
 
 void setTargetCPU(const std::string &cpu);
 void clearTargetCPU();
-std::string getTargetCPUOption();
+std::string getTargetCPUOption(
+    bool forLLVMToolchain = false, bool cpuOnly = false);
 
 int setTargetAccel(const std::string &str);
 void setTargetAccel(const accel::Accelerator::Kind accel);
