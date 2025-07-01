@@ -18,29 +18,32 @@ build-docker:
       --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile"
       --destination "${DOCKER_IMAGE}:${CI_COMMIT_REF_NAME}"
       --destination "${DOCKER_IMAGE}:latest"
+  cache:
+    key: "${CI_COMMIT_REF_SLUG}"
+    paths: [ ]
   rules:
-    - if: $CI_COMMIT_REF_PROTECTED == "true"
-      changes:
+    #    - if: $CI_COMMIT_REF_PROTECTED == "true"
+    - changes:
         - docker/Dockerfile
 
-build-docker-no-push:
-  stage: build-docker
-  image:
-    name: gcr.io/kaniko-project/executor:debug
-    entrypoint: [""]
-  before_script:
-    - echo "{\"auths\":{\"${DOCKER_REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${DOCKER_USERNAME}" "${DOCKER_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
-  script:
-    - /kaniko/executor
-      --context "${CI_PROJECT_DIR}"
-      --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile"
-      --destination "${DOCKER_IMAGE}:${CI_COMMIT_REF_NAME}"
-      --destination "${DOCKER_IMAGE}:latest"
-      --no-push
-  rules:
-    - if: $CI_COMMIT_REF_PROTECTED == "false"
-      changes:
-        - docker/Dockerfile
+#build-docker:
+#  stage: build-docker
+#  image:
+#    name: gcr.io/kaniko-project/executor:debug
+#    entrypoint: [""]
+#  before_script:
+#    - echo "{\"auths\":{\"${DOCKER_REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${DOCKER_USERNAME}" "${DOCKER_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+#  script:
+#    - /kaniko/executor
+#      --context "${CI_PROJECT_DIR}"
+#      --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile"
+#      --destination "${DOCKER_USERNAME}/onnxmlir/onnx-mlir-dev:${CI_COMMIT_REF_NAME}"
+#      --destination "${DOCKER_USERNAME}/onnxmlir/onnx-mlir-dev:latest"
+#  rules:
+#    #    - if: $CI_COMMIT_REF_PROTECTED == "true"
+##    - changes:
+##        - docker/Dockerfile
+
 
 build:
   stage: build
@@ -55,11 +58,9 @@ build:
     - pwd
     - mkdir -p build && cd build
   script:
-    - ls
-    - rm -rf /builds/ones-ai/mlir-arx/third_party/*
-    - git submodule update --init --recursive
     - cmake -G Ninja -DCMAKE_CXX_COMPILER=/usr/bin/c++ -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DMLIR_DIR=/workdir/llvm-project/build/lib/cmake/mlir  ..
     - cmake --build . --target onnx-mlir
     - cmake --build . --target check-onnx-lit
+
 
 
