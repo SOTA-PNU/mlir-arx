@@ -1,0 +1,38 @@
+add_onnx_mlir_library(OMARXCompilerOptions
+  ARXCompilerOptions.cpp
+
+  EXCLUDE_FROM_OM_LIBS
+
+  INCLUDE_DIRS PRIVATE
+  ${ARX_SRC_ROOT}
+  ${ARX_BIN_ROOT}
+  ${ARX_ONNX_MLIR_SRC_ROOT}
+  ${ARX_ONNX_MLIR_BIN_ROOT}
+
+  LINK_LIBS PUBLIC
+  OMCompilerOptions
+
+  ACCEL_INCLUDE_DIRS PRIVATE
+  ${ARX_ONNX_MLIR_SRC_ROOT}
+  ${ARX_ONNX_MLIR_BIN_ROOT}
+  )
+
+add_onnx_mlir_library(OMARXCompilerUtils
+  ARXCompilerUtils.cpp
+
+  EXCLUDE_FROM_OM_LIBS
+
+  INCLUDE_DIRS PRIVATE
+  ${ARX_SRC_ROOT}
+  ${ARX_BIN_ROOT}
+  ${ARX_ONNX_MLIR_SRC_ROOT}
+  ${ARX_ONNX_MLIR_BIN_ROOT}
+
+  LINK_LIBS PUBLIC
+  OMARXCompilerOptions
+  OMCompilerPasses
+
+  ACCEL_INCLUDE_DIRS PRIVATE
+  ${ARX_ONNX_MLIR_SRC_ROOT}
+  ${ARX_ONNX_MLIR_BIN_ROOT}
+  )
