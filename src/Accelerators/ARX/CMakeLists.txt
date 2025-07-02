@@ -22,11 +22,11 @@ set(ARX_INCLUDE_PATH ${CMAKE_INCLUDE_OUTPUT_DIRECTORY})
 set(ARX_ONNX_MLIR_SRC_ROOT ${ONNX_MLIR_SRC_ROOT})
 set(ARX_ONNX_MLIR_BIN_ROOT ${ONNX_MLIR_BIN_ROOT})
 
-# add_subdirectory(Dialect)
+add_subdirectory(Dialect)
 # add_subdirectory(Conversion)
-# add_subdirectory(Support)
+add_subdirectory(Support)
 # add_subdirectory(Transform)
-# add_subdirectory(Compiler)
+add_subdirectory(Compiler)
 # add_subdirectory(Runtime)
 
 add_onnx_mlir_library(OMARXAccel
@@ -38,15 +38,15 @@ add_onnx_mlir_library(OMARXAccel
   # RuntimeARX
 
   INCLUDE_DIRS PUBLIC
-  # ${ONNX_MLIR_SRC_ROOT}/include
-  # ${ONNX_MLIR_SRC_ROOT}
-  # ${ARX_ONNX_MLIR_SRC_ROOT}
-  # ${ARX_SRC_ROOT}
-  # ${ARX_BIN_ROOT}
-  # ${ARX_INCLUDE_PATH}
+  ${ONNX_MLIR_SRC_ROOT}/include
+  ${ONNX_MLIR_SRC_ROOT}
+  ${ARX_ONNX_MLIR_SRC_ROOT}
+  ${ARX_SRC_ROOT}
+  ${ARX_BIN_ROOT}
+  ${ARX_INCLUDE_PATH}
 
   LINK_LIBS PUBLIC
   onnx
-  # OMARXCompilerUtils
+  OMARXCompilerUtils
   OMAccelerator
   )

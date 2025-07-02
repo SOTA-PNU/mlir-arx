@@ -19,12 +19,12 @@
 #include "mlir/Transforms/Passes.h"
 #include "llvm/Support/Debug.h"
 
-// #include "src/Accelerators/ARX/Compiler/ARXCompilerUtils.hpp"
+#include "src/Accelerators/ARX/Compiler/ARXCompilerUtils.hpp"
 // #include "src/Accelerators/ARX/Conversion/ONNXToZHigh/ONNXLegalityCheck.hpp"
 // #include "src/Accelerators/ARX/Conversion/ZHighToZLow/ZHighToZLow.hpp"
 // #include "src/Accelerators/ARX/Conversion/ZLowToLLVM/ZLowToLLVM.hpp"
-// #include "src/Accelerators/ARX/Dialect/ZHigh/ZHighOps.hpp"
-// #include "src/Accelerators/ARX/Dialect/ZLow/ZLowOps.hpp"
+#include "src/Accelerators/ARX/Dialect/HARX/HARXOps.hpp"
+#include "src/Accelerators/ARX/Dialect/LARX/LARXOps.hpp"
 #include "src/Accelerators/ARX/ARXAccelerator.hpp"
 // #include "src/Accelerators/ARX/Pass/ARXPasses.hpp"
 // #include "src/Accelerators/ARX/Support/ARXLimit.hpp"
@@ -59,7 +59,7 @@ ARXAccelerator::ARXAccelerator() : Accelerator(Accelerator::Kind::ARX) {
 
   acceleratorTargets.push_back(this);
   // Order is important! libRuntimeARX depends on libzdnn
-  addCompilerConfig("CHACHA I DONT KNOW THAT", {"RuntimeARX", "zdnn"}, true);
+  // addCompilerConfig("CHACHA I DONT KNOW THAT", {"RuntimeARX", "zdnn"}, true);
 };
 
 ARXAccelerator::~ARXAccelerator() { delete instance; }
@@ -70,13 +70,13 @@ void ARXAccelerator::addPasses(mlir::OwningOpRef<mlir::ModuleOp> &module,
     mlir::PassManager &pm, onnx_mlir::EmissionTargetType &emissionTarget,
     std::string outputNameNoExt) const {
   LLVM_DEBUG(llvm::dbgs() << "Adding passes for ARX accelerator\n");
-  // addPassesARX(module, pm, emissionTarget, outputNameNoExt);
+  onnx_mlir::addPassesARX(module, pm, emissionTarget, outputNameNoExt);
 }
 
 void ARXAccelerator::registerDialects(mlir::DialectRegistry &registry) const {
   LLVM_DEBUG(llvm::dbgs() << "Registering dialects for ARX accelerator\n");
-  // registry.insert<zhigh::ZHighDialect>();
-  // registry.insert<zlow::ZLowDialect>();
+  registry.insert<onnx_mlir::harx::HARXDialect>();
+  registry.insert<onnx_mlir::larx::LARXDialect>();
 }
 
 void ARXAccelerator::registerPasses(int optLevel) const {
