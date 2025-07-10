@@ -465,8 +465,10 @@ IntegerAttr getAxisNHWC(IntegerAttr axisNCHWAttr) {
 
 bool hasARXUse(Value v) {
   return llvm::any_of(v.getUsers(), [](Operation *op) {
-    // Stick/Unstick ops are not considered as ARX ops.
-    return (op->getDialect()->getNamespace() == HARXDialect::getDialectNamespace());
+    // Stick/Unstick ops are not considered as NNPA ops.
+    return ((op->getDialect()->getNamespace() ==
+                HARXDialect::getDialectNamespace()) &&
+            !isa<HARXStickOp, HARXUnstickOp>(op));
   });
 }
 

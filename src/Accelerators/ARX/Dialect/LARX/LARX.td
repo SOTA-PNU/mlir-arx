@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//===-- ZLowOps.td -- ZLow Dialect Operation Definitions -*- tablegen ------==//
+//===-- LARXOps.td -- LARX Dialect Operation Definitions -*- tablegen ------==//
 //
 // Copyright 2019-2020 The IBM Research Authors
 //
 // =============================================================================
 //
-// Defines ZLow Dialect operations.
+// Defines LARX Dialect operations.
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef ZLOW_OPS
+#ifndef LARX_OPS
 
 #ifndef OP_BASE
 include "mlir/IR/OpBase.td"
@@ -23,7 +23,7 @@ def LARX_Dialect : Dialect {
   let usePropertiesForAttributes = 0;
 }
 
-// Base class for ZLow dialect operations. This operation inherits from the
+// Base class for LARX dialect operations. This operation inherits from the
 // base `Op` class in OpBase.td, and provides:
 //   * The parent dialect of the operation.
 //   * The mnemonic for the operation, or the name without the dialect prefix.
@@ -165,6 +165,43 @@ def LARXMatMulOp:LARX_Op<"matmul", [MemRefsNormalizable,
                        DefaultValuedAttr<SI64Attr, "-1">:$is_stacked);
 }
 
+
+def LARXStickOp:LARX_Op<"stick", [MemRefsNormalizable,
+    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+  let summary = "LARX stick operation";
+  let description = [{
+  "LARX operation to perform a stick."
+  }];
+  let arguments = (ins MemRefOf<[F16, F32]>:$X,
+                       ZMemRef:$Out,
+                       OptionalAttr<StrAttr>:$layout,
+                       OptionalAttr<SI64Attr>:$saturation);
+  let builders = [
+    OpBuilder<(ins "::mlir::Value":$X, "::mlir::Value":$Out), [{
+      build($_builder, $_state, X, Out, StringAttr(), IntegerAttr());
+    }]>,
+    OpBuilder<(ins "::mlir::Value":$X, "::mlir::Value":$Out, "::mlir::StringAttr":$layout), [{
+      build($_builder, $_state, X, Out, layout, IntegerAttr());
+    }]>
+  ];
+}
+
+def LARXUnstickOp:LARX_Op<"unstick", [MemRefsNormalizable,
+    DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+  let summary = "LARX unstick operation";
+  let description = [{
+  LARX operation to perform a unstick.
+  }];
+  let arguments = (ins ZMemRef:$X,
+                       MemRefOf<[F16, F32]>:$Out,
+                       OptionalAttr<StrAttr>:$layout);
+  let builders = [
+    OpBuilder<(ins "::mlir::Value":$X, "::mlir::Value":$Out), [{
+      build($_builder, $_state, X, Out, StringAttr());
+    }]>
+  ];
+}
+
 def LARXConv2DOp:LARX_Op<"conv2d", [MemRefsNormalizable,
     DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let summary = "LARX 2D convolution operation";
@@ -260,4 +297,4 @@ def LARXDummyOp:LARX_Op<"dummy", [MemRefsNormalizable]> {
   let hasCanonicalizer = 1;
 }
 
-#endif // ZLOW_OPS
+#endif // LARX_OPS

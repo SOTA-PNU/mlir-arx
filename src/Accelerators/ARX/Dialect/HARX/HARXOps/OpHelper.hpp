@@ -82,8 +82,8 @@ mlir::AffineMapAttr getTransposeMap(
 /// Get an axis for NHWC layout given an axis for NCHW layout.
 mlir::IntegerAttr getAxisNHWC(mlir::IntegerAttr axisNCHWAttr);
 
-/// Check if the value has NNPA users (or is consumed by an NNPA op).
-bool hasNNPAUse(mlir::Value v);
+/// Check if the value has ARX users (or is consumed by an ARX op).
+bool hasARXUse(mlir::Value v);
 
 /// Get saturation settings.
 mlir::IntegerAttr getDefaultSaturation(mlir::PatternRewriter &rewriter);

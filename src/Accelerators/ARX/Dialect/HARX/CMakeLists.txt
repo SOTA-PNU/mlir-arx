@@ -1,4 +1,4 @@
-# add_subdirectory(HARXOps)
+add_subdirectory(HARXOps)
 
 add_onnx_mlir_dialect(HARX harx)
 add_onnx_mlir_dialect_doc(harx HARX.td)
@@ -15,11 +15,16 @@ add_onnx_mlir_library(OMHARXOps
   HARXOps/MatMul/MatMul.cpp
   HARXOps/Pooling/Pooling.cpp
   HARXOps/Softmax/Softmax.cpp
+  HARXOps/Unstick/Unstick.cpp
+  HARXOps/Stick/Stick.cpp
+
 
   DEPENDS
   OMLayoutHelper
   OMHARXIncGen
   OMShapeInferenceOpInterfaceIncGen
+  OMONNXHARXStickIncGen
+  OMONNXHARXUnstickIncGen
 
   LINK_LIBS PRIVATE
   OMDiagnostic

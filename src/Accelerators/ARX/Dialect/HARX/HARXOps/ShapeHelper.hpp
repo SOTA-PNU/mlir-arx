@@ -32,6 +32,26 @@ namespace onnx_mlir {
 namespace harx {
 
 //===----------------------------------------------------------------------===//
+// Shape helper for Stick/Unstick/MeanReduce2D ops.
+//===----------------------------------------------------------------------===//
+
+#define DECLARE_SHAPE_HELPER_HARX(SHAPE_HELPER)                               \
+  class SHAPE_HELPER : public ONNXOpShapeHelper {                              \
+  public:                                                                      \
+    SHAPE_HELPER(mlir::Operation *op,                                          \
+        mlir::ArrayRef<mlir::Value> operands = {},                             \
+        IndexExprBuilder *ieBuilder = nullptr,                                 \
+        IndexExprScope *scope = nullptr)                                       \
+        : ONNXOpShapeHelper(op, operands, ieBuilder, scope) {}                 \
+    virtual ~SHAPE_HELPER() {}                                                 \
+    mlir::LogicalResult computeShape() final;                                  \
+  };
+// DECLARE_SHAPE_HELPER_HARX(HARXStickifiedConstantOfShapeOpShapeHelper)
+DECLARE_SHAPE_HELPER_HARX(HARXStickOpShapeHelper)
+DECLARE_SHAPE_HELPER_HARX(HARXUnstickOpShapeHelper)
+#undef DECLARE_SHAPE_HELPER_HARX
+
+//===----------------------------------------------------------------------===//
 // Shape helper for MatMulOp.
 //===----------------------------------------------------------------------===//
 

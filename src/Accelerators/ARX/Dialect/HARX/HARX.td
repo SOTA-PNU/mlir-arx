@@ -136,6 +136,71 @@ def SameOperandsAndResultLayout: NativeOpTrait<"SameOperandsAndResultLayout">;
 class HARX_Op<string mnemonic, list<Trait> traits = []> :
     Op<HARX_Dialect, mnemonic, traits>;
 
+
+def HARXStickOp:HARX_Op<"Stick", [Pure,
+    DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
+    DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
+  let summary = "HARX Stick operation";
+  let description = [{
+    HARX operation to perform a Stick."
+
+    If `layout`=`NHWC`, input must be in `NCHW` and output will be in `NHWC`.
+
+    Optional `saturation` indicates whether the CPU tensor is saturated before stickification
+    or not. If it is saturated, the dlfloat16 range would be used.
+    Saturation if off if `saturation == 0` or it is not given. Otherwise, it is on.
+  }];
+  let arguments = (ins AnyTypeOf<[TensorOf<[F32]>, NoneType]>:$In,
+                       OptionalAttr<StrAttr>:$layout,
+                       OptionalAttr<SI64Attr>:$saturation);
+  let results = (outs AnyTypeOf<[ZTensor_1D, ZTensor_2D, ZTensor_3D, ZTensor_4D,
+                                 ZTensor_2DS, ZTensor_3DS, ZTensor_4DS,
+                                 ZTensor_NHWC,  ZTensor_NCHW, ZTensor_HWCK,
+                                 NoneType]>:$Out);
+  let builders = [
+    OpBuilder<(ins "::mlir::Value":$In, "::mlir::StringAttr":$layout), [{
+      build($_builder, $_state, In, layout, IntegerAttr());
+    }]>,
+    OpBuilder<(ins "::mlir::Value":$In, "::mlir::StringAttr":$layout,
+               "::mlir::IntegerAttr":$saturation)>
+  ];
+  let hasCanonicalizer = 1;
+  let extraClassDefinition = [{
+    onnx_mlir::ONNXOpShapeHelper * HARXStickOp::getShapeHelper(mlir::Operation *op, mlir::ArrayRef<mlir::Value> oper,
+        onnx_mlir::IndexExprBuilder *ieb, onnx_mlir::IndexExprScope *scope) {
+      onnx_mlir::ONNXOpShapeHelper *sh = new HARXStickOpShapeHelper(op, oper, ieb, scope);
+      assert(sh && "failed to allocate shape helper");
+      return sh;
+    }
+  }];
+}
+
+def HARXUnstickOp:HARX_Op<"Unstick", [Pure,
+    DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
+    DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
+  let summary = "HARX Unstick operation";
+  let description = [{
+    HARX operation to perform a Unstick.
+  }];
+  let arguments = (ins AnyTypeOf<[ZTensor_1D, ZTensor_2D, ZTensor_3D, ZTensor_4D,
+                                 ZTensor_2DS, ZTensor_3DS, ZTensor_4DS,
+                                 ZTensor_NHWC, ZTensor_NCHW, ZTensor_HWCK]>:$In);
+  let results = (outs TensorOf<[F32]>:$Out);
+  let builders = [
+    OpBuilder<(ins "::mlir::Value":$In)>,
+  ];
+  let hasCanonicalizer = 1;
+  let extraClassDefinition = [{
+    onnx_mlir::ONNXOpShapeHelper * HARXUnstickOp::getShapeHelper(mlir::Operation *op, mlir::ArrayRef<mlir::Value> oper,
+        onnx_mlir::IndexExprBuilder *ieb, onnx_mlir::IndexExprScope *scope) {
+      onnx_mlir::ONNXOpShapeHelper *sh = new HARXUnstickOpShapeHelper(op, oper, ieb, scope);
+      assert(sh && "failed to allocate shape helper");
+      return sh;
+    }
+  }];
+}
+
+
 def HARXAddOp:HARX_Op<"Add", [Pure, SameOperandsAndResultLayout,
     DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
     DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {

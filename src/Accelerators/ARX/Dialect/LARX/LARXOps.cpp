@@ -129,6 +129,26 @@ void LARXSoftmaxOp::getEffects(
       SideEffects::DefaultResource::get());
 }
 
+void LARXStickOp::getEffects(
+    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+        &effects) {
+  effects.emplace_back(MemoryEffects::Write::get(), &getOutMutable(),
+      SideEffects::DefaultResource::get());
+  effects.emplace_back(MemoryEffects::Read::get(), &getXMutable(),
+      SideEffects::DefaultResource::get());
+}
+
+
+void LARXUnstickOp::getEffects(
+    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+        &effects) {
+  effects.emplace_back(MemoryEffects::Write::get(), &getOutMutable(),
+      SideEffects::DefaultResource::get());
+  effects.emplace_back(MemoryEffects::Read::get(), &getXMutable(),
+      SideEffects::DefaultResource::get());
+}
+
+
 void LARXMatMulOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
         &effects) {
