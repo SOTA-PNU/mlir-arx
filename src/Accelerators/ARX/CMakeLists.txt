@@ -23,7 +23,7 @@ set(ARX_ONNX_MLIR_SRC_ROOT ${ONNX_MLIR_SRC_ROOT})
 set(ARX_ONNX_MLIR_BIN_ROOT ${ONNX_MLIR_BIN_ROOT})
 
 add_subdirectory(Dialect)
-# add_subdirectory(Conversion)
+add_subdirectory(Conversion)
 add_subdirectory(Support)
 # add_subdirectory(Transform)
 add_subdirectory(Compiler)

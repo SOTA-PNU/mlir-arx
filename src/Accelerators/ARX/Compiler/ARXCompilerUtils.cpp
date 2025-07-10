@@ -39,17 +39,17 @@
 #include "src/Compiler/CompilerPasses.hpp"
 #include "src/Pass/Passes.hpp"
 
+#include <iostream>
 #define DEBUG_TYPE "ARXCompilerUtils"
 
 using namespace mlir;
 using namespace onnx_mlir;
 
 namespace onnx_mlir {
-
 void addPassesARX(mlir::OwningOpRef<mlir::ModuleOp> &module,
   mlir::PassManager &pm, EmissionTargetType &emissionTarget,
   std::string outputNameNoExt) {
-
+  std::cout << "CHACHA! " << arxEnableCuteChaCha << " \n";
 }
 
 } // namespace onnx_mlir
