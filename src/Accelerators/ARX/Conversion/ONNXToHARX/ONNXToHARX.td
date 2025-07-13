@@ -209,86 +209,86 @@ def replaceONNXDivPattern : Pat<
   (addBenefit 0)
 >;
 
-//===----------------------------------------------------------------------===//
-// ONNXSoftmaxOp %X = ONNXSqueezeOp
-//                        (HARXUnstickOp
-//                            (HARXSoftmaxOp
-//                                (HARXStickOp (ONNXUnsqueezeOp %X, 0), (GetDefaultSaturation)),
-//                                0))
-//===----------------------------------------------------------------------===//
+// //===----------------------------------------------------------------------===//
+// // ONNXSoftmaxOp %X = ONNXSqueezeOp
+// //                        (HARXUnstickOp
+// //                            (HARXSoftmaxOp
+// //                                (HARXStickOp (ONNXUnsqueezeOp %X, 0), (GetDefaultSaturation)),
+// //                                0))
+// //===----------------------------------------------------------------------===//
 
-def replaceONNXSoftmax2DPattern : Pattern<
-  (ONNXSoftmaxOp:$res $x, $axis),
-  [
-   // Get unstick result
-   (HARXUnstickOp:$unstick
-       (HARXSoftmaxOp
-           (HARXStickOp:$s_x
-               (EmitOp3<"ONNXUnsqueezeV11Op">
-                   (GetUnrankedTensorTypeOf $x),
-                   $x,
-                   (GetI64ArrayAttr<0>)),
-               (_3DSLayoutAttr),
-               (GetDefaultSaturation)),
-           (GetStringAttr<"ACT_NONE">),
-           (returnType $s_x))),
+// def replaceONNXSoftmax2DPattern : Pattern<
+//   (ONNXSoftmaxOp:$res $x, $axis),
+//   [
+//    // Get unstick result
+//    (HARXUnstickOp:$unstick
+//        (HARXSoftmaxOp
+//            (HARXStickOp:$s_x
+//                (EmitOp3<"ONNXUnsqueezeV11Op">
+//                    (GetUnrankedTensorTypeOf $x),
+//                    $x,
+//                    (GetI64ArrayAttr<0>)),
+//                (_3DSLayoutAttr),
+//                (GetDefaultSaturation)),
+//            (GetStringAttr<"ACT_NONE">),
+//            (returnType $s_x))),
 
-   (EmitOp3<"ONNXSqueezeV11Op">
-       (GetTypeOf $res),
-       $unstick,
-       (GetI64ArrayAttr<0>))
-  ],
-  [(HasRankOf<2> $x)]
->;
+//    (EmitOp3<"ONNXSqueezeV11Op">
+//        (GetTypeOf $res),
+//        $unstick,
+//        (GetI64ArrayAttr<0>))
+//   ],
+//   [(HasRankOf<2> $x)]
+// >;
 
-def replaceONNXSoftmax3DPattern : Pat<
-  (ONNXSoftmaxOp:$res $x, $axis),
-  // Get unstick result
-  (HARXUnstickOp:$unstick
-     (HARXSoftmaxOp
-        (HARXStickOp:$s_x $x, (_3DSLayoutAttr), (GetDefaultSaturation)),
-        (GetStringAttr<"ACT_NONE">),
-        (returnType $s_x))),
-  [(HasRankOf<3> $x)]
->;
+// def replaceONNXSoftmax3DPattern : Pat<
+//   (ONNXSoftmaxOp:$res $x, $axis),
+//   // Get unstick result
+//   (HARXUnstickOp:$unstick
+//      (HARXSoftmaxOp
+//         (HARXStickOp:$s_x $x, (_3DSLayoutAttr), (GetDefaultSaturation)),
+//         (GetStringAttr<"ACT_NONE">),
+//         (returnType $s_x))),
+//   [(HasRankOf<3> $x)]
+// >;
 
-//===----------------------------------------------------------------------===//
-// ONNXLogSoftmaxOp (ONNXSoftmaxOp %X) =
-//   ONNXSqueezeOp
-//     (HARXUnstickOp
-//         (HARXSoftmaxOp
-//            (HARXStickOp (ONNXUnsqueezeOp %X, 0), (GetDefaultSaturation)),
-//            "ACT_LOG"),
-//     0)
-//===----------------------------------------------------------------------===//
-def IsSoftmaxLegalForZDNN: Constraint<
-  CPred<"isSuitableForZDNN<ONNXSoftmaxOp>(" #
-             "dyn_cast_or_null<ONNXSoftmaxOp>($0.getDefiningOp()))">,
-  "Softmax is legal for zDNN"
->;
-def replaceONNXLogSoftmaxPattern : Pattern<
-  (ONNXLogOp:$res (ONNXSoftmaxOp:$s $x, $axis)),
-  [
-   // Get unstick result
-   (HARXUnstickOp:$unstick
-       (HARXSoftmaxOp
-           (HARXStickOp:$s_x
-               (EmitOp3<"ONNXUnsqueezeV11Op">
-                   (GetUnrankedTensorTypeOf $x),
-                   $x,
-                   (GetI64ArrayAttr<0>)),
-               (_3DSLayoutAttr),
-               (GetDefaultSaturation)),
-           (GetStringAttr<"ACT_LOG">),
-           (returnType $s_x))),
+// //===----------------------------------------------------------------------===//
+// // ONNXLogSoftmaxOp (ONNXSoftmaxOp %X) =
+// //   ONNXSqueezeOp
+// //     (HARXUnstickOp
+// //         (HARXSoftmaxOp
+// //            (HARXStickOp (ONNXUnsqueezeOp %X, 0), (GetDefaultSaturation)),
+// //            "ACT_LOG"),
+// //     0)
+// //===----------------------------------------------------------------------===//
+// def IsSoftmaxLegalForZDNN: Constraint<
+//   CPred<"isSuitableForZDNN<ONNXSoftmaxOp>(" #
+//              "dyn_cast_or_null<ONNXSoftmaxOp>($0.getDefiningOp()))">,
+//   "Softmax is legal for zDNN"
+// >;
+// def replaceONNXLogSoftmaxPattern : Pattern<
+//   (ONNXLogOp:$res (ONNXSoftmaxOp:$s $x, $axis)),
+//   [
+//    // Get unstick result
+//    (HARXUnstickOp:$unstick
+//        (HARXSoftmaxOp
+//            (HARXStickOp:$s_x
+//                (EmitOp3<"ONNXUnsqueezeV11Op">
+//                    (GetUnrankedTensorTypeOf $x),
+//                    $x,
+//                    (GetI64ArrayAttr<0>)),
+//                (_3DSLayoutAttr),
+//                (GetDefaultSaturation)),
+//            (GetStringAttr<"ACT_LOG">),
+//            (returnType $s_x))),
 
-   (EmitOp3<"ONNXSqueezeV11Op">
-       (GetTypeOf $res),
-       $unstick,
-       (GetI64ArrayAttr<0>))
-  ],
-  [(IsSoftmaxLegalForZDNN $s)]
->;
+//    (EmitOp3<"ONNXSqueezeV11Op">
+//        (GetTypeOf $res),
+//        $unstick,
+//        (GetI64ArrayAttr<0>))
+//   ],
+//   [(IsSoftmaxLegalForZDNN $s)]
+// >;
 
 //===----------------------------------------------------------------------===//
 // ONNXMaxPoolSingleOutOp %X =
@@ -528,42 +528,42 @@ def replaceONNXGemmBias2DPattern : Pat<
   (addBenefit 0)
 >;
 
-//===----------------------------------------------------------------------===//
-// LSTM
-//===----------------------------------------------------------------------===//
+// //===----------------------------------------------------------------------===//
+// // LSTM
+// //===----------------------------------------------------------------------===//
 
-def GetLSTMGRUBiasSplitShape : NativeCodeCall<
-  "getLSTMGRUBiasSplitShape($_loc, $_builder, $0)"
->;
+// def GetLSTMGRUBiasSplitShape : NativeCodeCall<
+//   "getLSTMGRUBiasSplitShape($_loc, $_builder, $0)"
+// >;
 
-class GetLSTMGRUZDNNWeightFromONNXWeight<string opName> : NativeCodeCall<
-  "getLSTMGRUZDNNWeightFromONNXWeight($_loc, $_builder, $0,"
-  "!strcmp(\"" # opName # "\", \"LSTM\"))">;
+// class GetLSTMGRUZDNNWeightFromONNXWeight<string opName> : NativeCodeCall<
+//   "getLSTMGRUZDNNWeightFromONNXWeight($_loc, $_builder, $0,"
+//   "!strcmp(\"" # opName # "\", \"LSTM\"))">;
 
-def GetLSTMGRUReturnAllStepsAttr : NativeCodeCall<
-  "$_builder.getIntegerAttr($_builder.getIntegerType(64, true),"
-  "(isNoneValue($0) ? 1 : -1))">;
+// def GetLSTMGRUReturnAllStepsAttr : NativeCodeCall<
+//   "$_builder.getIntegerAttr($_builder.getIntegerType(64, true),"
+//   "(isNoneValue($0) ? 1 : -1))">;
 
-def GetLSTMGRUGetY :
-        NativeCodeCall<"getLSTMGRUGetY($_loc, $_builder, $0, $1)">;
+// def GetLSTMGRUGetY :
+//         NativeCodeCall<"getLSTMGRUGetY($_loc, $_builder, $0, $1)">;
 
-def GetLSTMGRUGetYh :
-        NativeCodeCall<"getLSTMGRUGetYh($_loc, $_builder, $0, $1, $2, $3, $4)">;
+// def GetLSTMGRUGetYh :
+//         NativeCodeCall<"getLSTMGRUGetYh($_loc, $_builder, $0, $1, $2, $3, $4)">;
 
-def GetLSTMGRUGetYWithSequenceLens :
-        NativeCodeCall<"getLSTMGRUGetYWithSequenceLens($_loc, $_builder, $0, $1, $2, $3)">;
+// def GetLSTMGRUGetYWithSequenceLens :
+//         NativeCodeCall<"getLSTMGRUGetYWithSequenceLens($_loc, $_builder, $0, $1, $2, $3)">;
 
-def GetLSTMGRUGetYhWithSequenceLens :
-        NativeCodeCall<"getLSTMGRUGetYhWithSequenceLens($_loc, $_builder, $0, $1, $2, $3, $4, $5)">;
+// def GetLSTMGRUGetYhWithSequenceLens :
+//         NativeCodeCall<"getLSTMGRUGetYhWithSequenceLens($_loc, $_builder, $0, $1, $2, $3, $4, $5)">;
 
-def GetLSTMGRUGetYc :
-        NativeCodeCall<"getLSTMGRUGetYc($_loc, $_builder, $0, $1)">;
+// def GetLSTMGRUGetYc :
+//         NativeCodeCall<"getLSTMGRUGetYc($_loc, $_builder, $0, $1)">;
 
-def EmitONNXSplitOp6Results :
-        NativeCodeCall<"emitONNXSplitOp($_loc, $_builder, $0, $1, $2)", 6>;
+// def EmitONNXSplitOp6Results :
+//         NativeCodeCall<"emitONNXSplitOp($_loc, $_builder, $0, $1, $2)", 6>;
 
-def EmitONNXSplitOp8Results :
-        NativeCodeCall<"emitONNXSplitOp($_loc, $_builder, $0, $1, $2)", 8>;
+// def EmitONNXSplitOp8Results :
+//         NativeCodeCall<"emitONNXSplitOp($_loc, $_builder, $0, $1, $2)", 8>;
 
 //===----------------------------------------------------------------------===//
 // Rewrite
@@ -596,25 +596,25 @@ def GetI64ArrayAttrStridesConv: NativeCodeCall<
   "$_builder.getI64ArrayAttr(getArrayStrides<ONNXConvOp, ONNXConvOpAdaptor,"
   "ONNXConvOpShapeHelper>($0.getDefiningOp<ONNXConvOp>()))">;
 
-def replaceONNXConv2DPattern : Pattern<
-  (ONNXConvOp:$res $x, $w, $b, $_, $_, $_, $_, $_, $_),
-  [
-   // Get attributes using shape helper
-   (GetStrAttrPaddingtypeConv:$padtype $res),
-   (GetI64ArrayAttrKernelShapeConv:$kernel_shape $res),
-   (GetI64ArrayAttrStridesConv:$strides $res),
+// def replaceONNXConv2DPattern : Pattern<
+//   (ONNXConvOp:$res $x, $w, $b, $_, $_, $_, $_, $_, $_),
+//   [
+//    // Get attributes using shape helper
+//    (GetStrAttrPaddingtypeConv:$padtype $res),
+//    (GetI64ArrayAttrKernelShapeConv:$kernel_shape $res),
+//    (GetI64ArrayAttrStridesConv:$strides $res),
 
-   (HARXUnstickOp
-    (HARXConv2DOp
-       (HARXStickOp $x, (NHWCLayoutAttr), (GetDefaultSaturation)),
-       (HARXStickOp (NCHWtoHWCK $w), (HWCKLayoutAttr), (GetDefaultSaturation)),
-       (HARXStickOp $b, (_1DLayoutAttr), (GetDefaultSaturation)),
-       $kernel_shape,
-       $strides,
-       $padtype,
-       (ACT_NONEAttr)))
-  ]
->;
+//    (HARXUnstickOp
+//     (HARXConv2DOp
+//        (HARXStickOp $x, (NHWCLayoutAttr), (GetDefaultSaturation)),
+//        (HARXStickOp (NCHWtoHWCK $w), (HWCKLayoutAttr), (GetDefaultSaturation)),
+//        (HARXStickOp $b, (_1DLayoutAttr), (GetDefaultSaturation)),
+//        $kernel_shape,
+//        $strides,
+//        $padtype,
+//        (ACT_NONEAttr)))
+//   ]
+// >;
 
 //===----------------------------------------------------------------------===//
 // Rewrite
@@ -635,32 +635,32 @@ def replaceONNXConv2DPattern : Pattern<
 //
 //===----------------------------------------------------------------------===//
 
-def IsConv2DLegalForZDNN: Constraint<
-  CPred<"isSuitableForZDNN<ONNXConvOp>(" #
-             "dyn_cast_or_null<ONNXConvOp>($0.getDefiningOp()))">,
-  "Conv is legal for zDNN"
->;
+// def IsConv2DLegalForZDNN: Constraint<
+//   CPred<"isSuitableForZDNN<ONNXConvOp>(" #
+//              "dyn_cast_or_null<ONNXConvOp>($0.getDefiningOp()))">,
+//   "Conv is legal for zDNN"
+// >;
 
-def replaceONNXReluConvPattern : Pattern<
-  (ONNXReluOp (ONNXConvOp:$res $x, $w, $b, $_, $_, $_, $_, $_, $_)),
-  [
-   // Get attributes using shape helper
-   (GetStrAttrPaddingtypeConv:$padtype $res),
-   (GetI64ArrayAttrKernelShapeConv:$kernel_shape $res),
-   (GetI64ArrayAttrStridesConv:$strides $res),
+// def replaceONNXReluConvPattern : Pattern<
+//   (ONNXReluOp (ONNXConvOp:$res $x, $w, $b, $_, $_, $_, $_, $_, $_)),
+//   [
+//    // Get attributes using shape helper
+//    (GetStrAttrPaddingtypeConv:$padtype $res),
+//    (GetI64ArrayAttrKernelShapeConv:$kernel_shape $res),
+//    (GetI64ArrayAttrStridesConv:$strides $res),
 
-   (HARXUnstickOp
-    (HARXConv2DOp
-       (HARXStickOp $x, (NHWCLayoutAttr), (GetDefaultSaturation)),
-       (HARXStickOp (NCHWtoHWCK $w), (HWCKLayoutAttr), (GetDefaultSaturation)),
-       (HARXStickOp $b, (_1DLayoutAttr), (GetDefaultSaturation)),
-       $kernel_shape,
-       $strides,
-       $padtype,
-       (ACT_RELUAttr)))
-  ],
-  [(IsConv2DLegalForZDNN $res)], [],
-  (addBenefit 0)
->;
+//    (HARXUnstickOp
+//     (HARXConv2DOp
+//        (HARXStickOp $x, (NHWCLayoutAttr), (GetDefaultSaturation)),
+//        (HARXStickOp (NCHWtoHWCK $w), (HWCKLayoutAttr), (GetDefaultSaturation)),
+//        (HARXStickOp $b, (_1DLayoutAttr), (GetDefaultSaturation)),
+//        $kernel_shape,
+//        $strides,
+//        $padtype,
+//        (ACT_RELUAttr)))
+//   ],
+//   [(IsConv2DLegalForZDNN $res)], [],
+//   (addBenefit 0)
+// >;
 
 #endif // ONNX_TO_ZHIGH

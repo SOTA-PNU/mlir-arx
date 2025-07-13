@@ -32,9 +32,9 @@
 
 #include "src/Accelerators/ARX/Compiler/ARXCompilerOptions.hpp"
 #include "src/Accelerators/ARX/Compiler/ARXCompilerUtils.hpp"
-// #include "src/Accelerators/ARX/Dialect/ZHigh/ZHighOps.hpp"
-// #include "src/Accelerators/ARX/Dialect/ZLow/ZLowOps.hpp"
-// #include "src/Accelerators/ARX/Pass/NNPAPasses.hpp"
+#include "src/Accelerators/ARX/Dialect/HARX/HARXOps.hpp"
+#include "src/Accelerators/ARX/Dialect/LARX/LARXOps.hpp"
+#include "src/Accelerators/ARX/Pass/ARXPasses.hpp"
 #include "src/Compiler/CompilerOptions.hpp"
 #include "src/Compiler/CompilerPasses.hpp"
 #include "src/Pass/Passes.hpp"
@@ -49,7 +49,23 @@ namespace onnx_mlir {
 void addPassesARX(mlir::OwningOpRef<mlir::ModuleOp> &module,
   mlir::PassManager &pm, EmissionTargetType &emissionTarget,
   std::string outputNameNoExt) {
-  std::cout << "CHACHA! " << arxEnableCuteChaCha << " \n";
+  llvm::outs() << "CHACHA! " << arxEnableCuteChaCha << " \n";
+
+  llvm::outs() << "configurePasses\n";
+  configurePasses();
+
+  llvm::outs() << "addONNXToMLIRPasses\n";
+  addONNXToMLIRPasses(pm, /*target CPU*/ maccel.empty());
+
+  // for (unsigned i = 0; i < 3; i++) {
+    // pm.addPass(onnx_mlir::createRewriteONNXForHARXPass());
+    // pm.addPass(onnx_mlir::createSimplifyShapeRelatedOpsPass());
+  // }
+  // pm.addPass(onnx_mlir::createRewriteONNXForHARXPass());
+  pm.addNestedPass<func::FuncOp>(onnx_mlir::createShapeInferencePass());
+  pm.addPass(onnx_mlir::createONNXToHARXPass());
+  pm.addPass(mlir::createCanonicalizerPass());
+
 }
 
 } // namespace onnx_mlir

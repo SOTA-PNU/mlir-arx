@@ -26,9 +26,5 @@ namespace onnx_mlir {
 void getONNXToHARXOneOpPatterns(mlir::RewritePatternSet &patterns);
 void getONNXToHARXMultipleOpPatterns(mlir::RewritePatternSet &patterns);
 
-// Exports ONNXtoHARX dynamically legal checks.
-void getONNXToHARXOneOpDynamicallyLegal(
-    mlir::ConversionTarget *target, const DimAnalysis *dimAnalysis);
-
 } // namespace onnx_mlir
 #endif

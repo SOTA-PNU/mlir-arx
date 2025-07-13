@@ -20,15 +20,17 @@
 #include "llvm/Support/Debug.h"
 
 #include "src/Accelerators/ARX/Compiler/ARXCompilerUtils.hpp"
+#include "src/Accelerators/ARX/Conversion/ONNXToHARX/ONNXToHARX.hpp"
 // #include "src/Accelerators/ARX/Conversion/ONNXToZHigh/ONNXLegalityCheck.hpp"
 // #include "src/Accelerators/ARX/Conversion/ZHighToZLow/ZHighToZLow.hpp"
 // #include "src/Accelerators/ARX/Conversion/ZLowToLLVM/ZLowToLLVM.hpp"
 #include "src/Accelerators/ARX/Dialect/HARX/HARXOps.hpp"
 #include "src/Accelerators/ARX/Dialect/LARX/LARXOps.hpp"
 #include "src/Accelerators/ARX/ARXAccelerator.hpp"
-// #include "src/Accelerators/ARX/Pass/ARXPasses.hpp"
+#include "src/Accelerators/ARX/Pass/ARXPasses.hpp"
 // #include "src/Accelerators/ARX/Support/ARXLimit.hpp"
 #include "src/Compiler/CompilerOptions.hpp"
+#include <iostream>
 
 #include <memory>
 
@@ -50,12 +52,12 @@ ARXAccelerator *ARXAccelerator::getInstance() {
 }
 
 ARXAccelerator::ARXAccelerator() : Accelerator(Accelerator::Kind::ARX) {
-  LLVM_DEBUG(llvm::dbgs() << "Creating an ARX accelerator\n");
+  llvm::outs() << "Creating an ARX accelerator asdfasdf\n";
 
   // Print a warning if mcpu is not set or < z16.
   // if (!isCompatibleWithARXLevel(ARX_Z16))
-  //   llvm::outs() << "Warning: No ARX code is generated because --mcpu is not "
-  //                   "set or < z16.\n";
+    // llvm::outs() << "Warning: No ARX code is generated because --mcpu is not "
+                    // "set or < z16.\n";
 
   acceleratorTargets.push_back(this);
   // Order is important! libRuntimeARX depends on libzdnn
@@ -70,25 +72,25 @@ void ARXAccelerator::addPasses(mlir::OwningOpRef<mlir::ModuleOp> &module,
     mlir::PassManager &pm, onnx_mlir::EmissionTargetType &emissionTarget,
     std::string outputNameNoExt) const {
   LLVM_DEBUG(llvm::dbgs() << "Adding passes for ARX accelerator\n");
+  llvm::outs() << "Adding passes for ARX accelerator\n";
   onnx_mlir::addPassesARX(module, pm, emissionTarget, outputNameNoExt);
+
 }
 
 void ARXAccelerator::registerDialects(mlir::DialectRegistry &registry) const {
   LLVM_DEBUG(llvm::dbgs() << "Registering dialects for ARX accelerator\n");
+  llvm::outs() << "Registering dialects for ARX accelerator\n";
+  
   registry.insert<onnx_mlir::harx::HARXDialect>();
   registry.insert<onnx_mlir::larx::LARXDialect>();
 }
 
 void ARXAccelerator::registerPasses(int optLevel) const {
   LLVM_DEBUG(llvm::dbgs() << "Registering passes for ARX accelerator\n");
-  // mlir::registerPass([]() -> std::unique_ptr<mlir::Pass> {
-    // return onnx_mlir::createDevicePlacementPass(ARXLoadDevicePlacementFile,
-        // ARXSaveDevicePlacementFile, ARXPlacementHeuristic);
-  // });
-
-  // mlir::registerPass([]() -> std::unique_ptr<mlir::Pass> {
-  //   return onnx_mlir::createONNXToZHighPass();
-  // });
+  llvm::outs() << "Registering passes for ARX accelerator\n";
+  mlir::registerPass([]() -> std::unique_ptr<mlir::Pass> {
+    return onnx_mlir::createONNXToHARXPass();
+  });
   // mlir::registerPass([]() -> std::unique_ptr<mlir::Pass> {
   //   return onnx_mlir::createZHighToONNXPass();
   // });
@@ -106,7 +108,10 @@ void ARXAccelerator::registerPasses(int optLevel) const {
       }
   void ARXAccelerator::rewritePatternONNXToKrnl(mlir::RewritePatternSet &patterns,
       mlir::TypeConverter &typeConverter, mlir::MLIRContext *ctx) const{
-      }
+        
+
+  }
+
   int64_t ARXAccelerator::getDefaultAllocAlignment(
       const mlir::TensorType tensorType) const {
         return 0;

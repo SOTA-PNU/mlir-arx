@@ -14,7 +14,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "src/Accelerators/ARX/Conversion/ONNXToHARX/ONNXToHARX.hpp"
-#include "src/Accelerators/ARX/Conversion/ONNXToHARX/ONNXToHARXCommon.hpp"
+
+#include "src/Accelerators/ARX/Support/ARXLimit.hpp"
+#include "src/Dialect/ONNX/ONNXDimAnalysis.hpp"
+
 #include "src/Accelerators/ARX/Dialect/HARX/HARXOps.hpp"
 #include "src/Accelerators/ARX/Dialect/HARX/HARXOps/OpHelper.hpp"
 #include "src/Accelerators/ARX/Pass/ARXPasses.hpp"
@@ -24,8 +27,12 @@
 #include "src/Dialect/ONNX/ONNXOps.hpp"
 #include "src/Dialect/ONNX/ONNXOps/ShapeHelper.hpp"
 #include "src/Dialect/ONNX/Transforms/ShapeInference.hpp"
+#include "src/Accelerators/ARX/Support/LayoutHelper.hpp"
 
 using namespace mlir;
+
+
+#define DEBUG_TYPE "ARXONNXToHARX"
 
 //
 // LSTM/GRU specific functions
@@ -129,42 +136,26 @@ void getONNXToHARXOneOpPatterns(RewritePatternSet &patterns) {
   patterns.insert<ONNXSumOpPatternEnhancedRecursion>(context);
 }
 
-void getONNXToHARXOneOpDynamicallyLegal(
-    ConversionTarget *target, const DimAnalysis *dimAnalysis) {
-  addDynamicallyLegalOpFor<ONNXAddOp>(target, dimAnalysis);
-  addDynamicallyLegalOpFor<ONNXSubOp>(target, dimAnalysis);
-  addDynamicallyLegalOpFor<ONNXMulOp>(target, dimAnalysis);
-  addDynamicallyLegalOpFor<ONNXDivOp>(target, dimAnalysis);
-  addDynamicallyLegalOpFor<ONNXSumOp>(target, dimAnalysis);
-  // addDynamicallyLegalOpFor<ONNXMinOp>(target, dimAnalysis);
-  // addDynamicallyLegalOpFor<ONNXMaxOp>(target, dimAnalysis);
-  addDynamicallyLegalOpFor<ONNXReluOp>(target, dimAnalysis);
-  addDynamicallyLegalOpFor<ONNXTanhOp>(target, dimAnalysis);
-  // addDynamicallyLegalOpFor<ONNXSigmoidOp>(target, dimAnalysis);
-  // addDynamicallyLegalOpFor<ONNXLogOp>(target, dimAnalysis);
-  // addDynamicallyLegalOpFor<ONNXExpOp>(target, dimAnalysis);
-  addDynamicallyLegalOpFor<ONNXSoftmaxOp>(target, dimAnalysis);
-  addDynamicallyLegalOpFor<ONNXMaxPoolSingleOutOp>(target, dimAnalysis);
-  addDynamicallyLegalOpFor<ONNXAveragePoolOp>(target, dimAnalysis);
-  addDynamicallyLegalOpFor<ONNXMatMulOp>(target, dimAnalysis);
-  addDynamicallyLegalOpFor<ONNXGemmOp>(target, dimAnalysis);
-  // addDynamicallyLegalOpFor<ONNXReduceMeanV13Op>(target, dimAnalysis);
-  // addDynamicallyLegalOpFor<ONNXLSTMOp>(target, dimAnalysis);
-  // addDynamicallyLegalOpFor<ONNXGRUOp>(target, dimAnalysis);
-  addDynamicallyLegalOpFor<ONNXConvOp>(target, dimAnalysis);
-}
-
 void getONNXToHARXMultipleOpPatterns(RewritePatternSet &patterns) {
   MLIRContext *context = patterns.getContext();
-  patterns.insert<replaceONNXMatMulAddPattern1>(context);
-  patterns.insert<replaceONNXMatMulAddPattern2>(context);
-  patterns.insert<replaceONNXReluConvPattern>(context);
+  patterns.insert<replaceONNXAddPattern>(context);
+  // patterns.insert<replaceONNXMatMulAddPattern1>(context);
+  // patterns.insert<replaceONNXMatMulAddPattern2>(context);
+  // patterns.insert<replaceONNXReluConvPattern>(context);
   // patterns.insert<replaceONNXLogSoftmaxPattern>(context);
   // Shape inference for newly-added operations.
   getShapeInferencePatterns(patterns);
 }
 
 void ONNXToHARXLoweringPass::runOnOperation() {
+  llvm::outs() << "ONNXToHARXLoweringPass::runOnOperation\n";
+  llvm::outs() << "ONNXToHARXLoweringPass::runOnOperation\n";
+  llvm::outs() << "ONNXToHARXLoweringPass::runOnOperation\n";
+  llvm::outs() << "ONNXToHARXLoweringPass::runOnOperation\n";
+  llvm::outs() << "ONNXToHARXLoweringPass::runOnOperation\n";
+  llvm::outs() << "ONNXToHARXLoweringPass::runOnOperation\n";
+  
+  LLVM_DEBUG(llvm::dbgs() << "ONNXToHARXLoweringPass::runOnOperation\n");
   ModuleOp module = getOperation();
 
   // The first thing to define is the conversion target. This will define the
@@ -202,19 +193,14 @@ void ONNXToHARXLoweringPass::runOnOperation() {
   onnx_mlir::DimAnalysis dimAnalysis(module);
   dimAnalysis.analyze();
 
-  // Single ONNX to HARX operation lowering.
-  RewritePatternSet patterns(&getContext());
-  onnx_mlir::getONNXToHARXOneOpPatterns(patterns);
+  // // Single ONNX to HARX operation lowering.
+  // RewritePatternSet patterns(&getContext());
+  // onnx_mlir::getONNXToHARXOneOpPatterns(patterns);
 
   // This is to make sure we don't want to alloc any MemRef at this high-level
   // representation.
   target.addIllegalOp<mlir::memref::AllocOp>();
   target.addIllegalOp<mlir::memref::DeallocOp>();
-
-  // ONNX ops to HARX dialect under specific conditions.
-  // When adding a new op, need to implement a method, i.e. isSuitableForZDNN,
-  // for the op in ONNXLegalityCheck.cpp.
-  getONNXToHARXOneOpDynamicallyLegal(&target, &dimAnalysis);
 
   // With the target and rewrite patterns defined, we can now attempt the
   // conversion. The conversion will signal failure if any of our `illegal`

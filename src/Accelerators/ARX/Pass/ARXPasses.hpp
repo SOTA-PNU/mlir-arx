@@ -23,13 +23,14 @@
 namespace onnx_mlir {
 
 // Add pass for device placement.
-std::unique_ptr<mlir::Pass> createDevicePlacementPass();
-std::unique_ptr<mlir::Pass> createDevicePlacementPass(
-    std::string loadConfigFile, std::string saveConfigFile,
-    ARXPlacementHeuristic placementHeuristic);
+// std::unique_ptr<mlir::Pass> createDevicePlacementPass();
+// std::unique_ptr<mlir::Pass> createDevicePlacementPass(
+    // std::string loadConfigFile, std::string saveConfigFile,
+    // ARXPlacementHeuristic placementHeuristic);
 
 /// Add pass for lowering ONNX ops to HARX ops.
 std::unique_ptr<mlir::Pass> createONNXToHARXPass();
+
 void configureOnnxToHARXLoweringPass(bool reportOnARXUnsupportedOps);
 
 /// Add pass for rewriting ONNX ops for HARX.

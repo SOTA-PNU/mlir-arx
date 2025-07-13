@@ -25,5 +25,7 @@ void addPassesARX(mlir::OwningOpRef<mlir::ModuleOp> &module,
     mlir::PassManager &pm, onnx_mlir::EmissionTargetType &emissionTarget,
     std::string outputNameNoExt);    
     
+    
+
 } // namespace onnx_mlir
 #endif

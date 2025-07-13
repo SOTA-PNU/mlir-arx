@@ -28,20 +28,20 @@ include "src/Accelerators/ARX/Dialect/HARX/HARX.td"
 ///    dag benefitsAdded = (addBenefit 0)
 /// >;
 
-class GetStringAttr<string s> :
-	NativeCodeCall<"$_builder.getStringAttr(\"" # s # "\")">;
+// class GetStringAttr<string s> :
+// 	NativeCodeCall<"$_builder.getStringAttr(\"" # s # "\")">;
 
-def NCHWtoNHWC : NativeCodeCall<
-  "emitONNXTranspose($_loc, $_builder, $0,"
-  "                  SmallVector<int64_t, 4>({0, 2, 3, 1}))">;
+// def NCHWtoNHWC : NativeCodeCall<
+//   "emitONNXTranspose($_loc, $_builder, $0,"
+//   "                  SmallVector<int64_t, 4>({0, 2, 3, 1}))">;
 
-def NCHWtoHWCK : NativeCodeCall<
-  "emitONNXTranspose($_loc, $_builder, $0,"
-  "                  SmallVector<int64_t, 4>({2, 3, 1, 0}))">;
+// def NCHWtoHWCK : NativeCodeCall<
+//   "emitONNXTranspose($_loc, $_builder, $0,"
+//   "                  SmallVector<int64_t, 4>({2, 3, 1, 0}))">;
 
-def NHWCtoNCHW: NativeCodeCall<
-  "emitONNXTransposeWithType($_loc, $_builder, $0, $1,"
-  "                          SmallVector<int64_t, 4>({0, 3, 1, 2}))">;
+// def NHWCtoNCHW: NativeCodeCall<
+//   "emitONNXTransposeWithType($_loc, $_builder, $0, $1,"
+//   "                          SmallVector<int64_t, 4>({0, 3, 1, 2}))">;
 
 def _1DLayoutAttr: NativeCodeCall<"$_builder.getStringAttr(LAYOUT_1D)">;
 def _2DLayoutAttr: NativeCodeCall<"$_builder.getStringAttr(LAYOUT_2D)">;
