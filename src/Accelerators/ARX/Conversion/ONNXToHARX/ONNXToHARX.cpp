@@ -2,215 +2,102 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//====------ ONNXToHARX.cpp - ONNX dialect to HARX lowering -------------===//
+//====------ ZHighToZLow.cpp - ZHigh dialect to ZLow lowering -------------===//
 //
-// Copyright 2019-2022 The IBM Research Authors.
+// Copyright 2019-2024 The IBM Research Authors.
 //
 // =============================================================================
 //
-// This file implements the lowering of ONNX operations to a combination of
-// ONNX and HARX operations.
+// This file implements the lowering of ZHigh operations to ZLow operations.
 //
 //===----------------------------------------------------------------------===//
+
+#include "llvm/Support/Debug.h"
+
+#include "mlir/Dialect/Affine/Analysis/Utils.h"
+#include "mlir/Dialect/Affine/Utils.h"
+#include "mlir/IR/AsmState.h"
+#include "mlir/IR/DialectResourceBlobManager.h"
 
 #include "src/Accelerators/ARX/Conversion/ONNXToHARX/ONNXToHARX.hpp"
-
-#include "src/Accelerators/ARX/Support/ARXLimit.hpp"
-#include "src/Dialect/ONNX/ONNXDimAnalysis.hpp"
-
 #include "src/Accelerators/ARX/Dialect/HARX/HARXOps.hpp"
 #include "src/Accelerators/ARX/Dialect/HARX/HARXOps/OpHelper.hpp"
+#include "src/Accelerators/ARX/Dialect/HARX/HARXOps/ShapeHelper.hpp"
+// #include "src/Accelerators/ARX/Dialect/LARX/LARXOps.hpp"
 #include "src/Accelerators/ARX/Pass/ARXPasses.hpp"
-#include "src/Conversion/ONNXToKrnl/RNN/RNNBase.hpp"
-#include "src/Dialect/ONNX/DialectBuilder.hpp"
-#include "src/Dialect/ONNX/ONNXDimAnalysis.hpp"
-#include "src/Dialect/ONNX/ONNXOps.hpp"
-#include "src/Dialect/ONNX/ONNXOps/ShapeHelper.hpp"
-#include "src/Dialect/ONNX/Transforms/ShapeInference.hpp"
 #include "src/Accelerators/ARX/Support/LayoutHelper.hpp"
+// #include "src/Accelerators/ARX/Support/Stickify/Convert.hpp"
+#include "src/Conversion/ONNXToKrnl/ONNXToKrnlCommon.hpp"
+#include "src/Dialect/Krnl/KrnlHelper.hpp"
+#include "src/Support/TypeUtilities.hpp"
+
+#define DEBUG_TYPE "harx-to-larx"
 
 using namespace mlir;
-
-
-#define DEBUG_TYPE "ARXONNXToHARX"
-
-//
-// LSTM/GRU specific functions
-//
+using namespace onnx_mlir::harx;
 
 namespace onnx_mlir {
+namespace harx {
 
-SmallVector<Value, 4> emitONNXSplitOp(Location loc, PatternRewriter &rewriter,
-    Value input, IntegerAttr axis, ArrayAttr split) {
-  Type elementType = mlir::cast<ShapedType>(input.getType()).getElementType();
-  SmallVector<Type> outputTypes;
-  int64_t splitNum = split.size();
-  ArrayRef<int64_t> inputShape =
-      mlir::cast<RankedTensorType>(input.getType()).getShape();
-  int64_t splitAxis = mlir::cast<IntegerAttr>(axis).getSInt();
-  assert(splitAxis >= 0 && "Negative axis");
-  for (int i = 0; i < splitNum; i++) {
-    SmallVector<int64_t> outputShape;
-    for (size_t dim = 0; dim < inputShape.size(); dim++) {
-      outputShape.emplace_back(
-          (dim == (unsigned int)splitAxis)
-              ? mlir::cast<IntegerAttr>(split[dim]).getInt()
-              : inputShape[dim]);
-    }
-    outputTypes.emplace_back(RankedTensorType::get(outputShape, elementType));
-  }
-  ONNXSplitV11Op splitOp =
-      rewriter.create<ONNXSplitV11Op>(loc, outputTypes, input, axis, split);
-  return splitOp.getResults();
-}
+using MDBuilder = MultiDialectBuilder<IndexExprBuilderForKrnl, KrnlBuilder,
+    MathBuilder, MemRefBuilder, VectorBuilder, AffineBuilder, SCFBuilder>;
 
-/// Get kernelShapes using shape helper
-template <typename OP, typename OPAdaptor, typename OPShapeHelper>
-SmallVector<int64_t, 2> getArrayKernelShape(OP op) {
-  OPShapeHelper shapeHelper(op.getOperation(), {});
-  shapeHelper.computeShapeAndAssertOnFailure();
+// int ZHighToZLowStickifiedConstantOpLowering::constantID = 0;
 
-  // Check if kernelShape is literal. Only static value is supported.
-  assert((llvm::any_of(shapeHelper.kernelShape, [](IndexExpr val) {
-    return val.isLiteral();
-  })) && "Only support static kernel_shape ");
-
-  SmallVector<int64_t, 2> kernelShapesRet;
-  kernelShapesRet.emplace_back(shapeHelper.kernelShape[0].getLiteral());
-  kernelShapesRet.emplace_back(shapeHelper.kernelShape[1].getLiteral());
-  return kernelShapesRet;
-}
-
-/// Get strides using shape helper
-template <typename OP, typename OPAdaptor, typename OPShapeHelper>
-SmallVector<int64_t, 2> getArrayStrides(OP op) {
-  OPShapeHelper shapeHelper(op.getOperation(), {});
-  shapeHelper.computeShapeAndAssertOnFailure();
-  return shapeHelper.strides;
-}
+template <typename OP_TYPE>
+struct HARXOpFor {
+  using Op = void;
+};
 
 //===----------------------------------------------------------------------===//
-// ONNX to HARX Lowering Pass
+// Lower ZHigh binary ops to ZLow.
 //===----------------------------------------------------------------------===//
 
-namespace {
-/// Include the patterns defined in the Declarative Rewrite framework.
-#include "src/Accelerators/ARX/Conversion/ONNXToHARX/ONNXONNXToHARX.inc"
+template <>
+struct HARXOpFor<ONNXAddOp> {
+  using Op = HARXAddOp;
+};
 
-// Enhance 'replaceONNXSumOpPatternRecursion' to allow operating recursively.
-struct ONNXSumOpPatternEnhancedRecursion
-    : public replaceONNXSumOpPatternRecursion {
-  ONNXSumOpPatternEnhancedRecursion(MLIRContext *context)
-      : replaceONNXSumOpPatternRecursion(context) {}
-  void initialize() {
-    // This pattern recursively unpacks one variadic operand at a time. The
-    // recursion bounded as the number of variadic operands is strictly
-    // decreasing.
-    setHasBoundedRewriteRecursion(true);
+struct OnnxToARXAddOpLowering : public OpConversionPattern<ONNXAddOp> {
+  using OpConversionPattern::OpConversionPattern;   // ctor 상속
+
+  LogicalResult matchAndRewrite(ONNXAddOp op, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    // 2) 결과 타입을 TypeConverter로 변환
+    llvm::outs() << "HELLO! !!!! " << ONNXAddOp::getOperationName() << "\n";
+    llvm::outs() << "HELLO! !!!! " << HARXAddOp::getOperationName() << "\n";
+
+    // getTypeConverter();
+    if (!getTypeConverter()) return failure();             // TypeConverter가 없으면 실패
+    Type dstTy = getTypeConverter()->convertType(op.getType());
+    if (!dstTy) return failure();                   // 변환 실패 시 bail-out
+    llvm::outs() << "HELLO! !!!! 1\n";
+
+    // 3) 새 ARX Add 생성 (lhs/rhs는 adaptor에서 이미 변환된 operand)
+    auto qLHS = rewriter.create<HARXAddOp>(op.getLoc(), dstTy, adaptor.getOperands()[0], adaptor.getOperands()[0], rewriter.getStringAttr("/Add"));
+    auto qRHS = rewriter.create<HARXAddOp>(op.getLoc(), dstTy, adaptor.getOperands()[1], adaptor.getOperands()[1], rewriter.getStringAttr("/Add2"));
+    auto add2 = rewriter.create<HARXAddOp>(op.getLoc(), dstTy, qLHS, qRHS, rewriter.getStringAttr("/Ad3"));
+    auto out = rewriter.create<HARXAddOp>(op.getLoc(), dstTy, add2, add2, rewriter.getStringAttr("/Add4"));
+    llvm::outs() << "HELLO! !!!! " << op->getAttrOfType<mlir::StringAttr>("onnx_node_name").getValue() << "\n";
+    // auto nodeName = out->getAttrOfType<mlir::StringAttr>("onnx_node_name");
+    // out->setAttr("onnx_node_name", nodeName);
+
+    llvm::outs() << "HELLO! !!!! 2\n";
+    rewriter.replaceOp(op, out.getResult());
+    return success();
   }
 };
 
-struct ONNXToHARXLoweringPass
-    : public PassWrapper<ONNXToHARXLoweringPass, OperationPass<ModuleOp>> {
 
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ONNXToHARXLoweringPass)
+void populateONNXToARXConversionPattern(TypeConverter &tc, mlir::RewritePatternSet &patterns, mlir::MLIRContext *ctx, bool enableParallel) {
+  llvm::outs() << "populateONNXToARXConversionPattern CALLED!!!!\n";
+      llvm::outs() << HARXAddOp::getOperationName() << "\n";
+      llvm::outs() << ONNXAddOp::getOperationName() << "\n";  
+  patterns.add<OnnxToARXAddOpLowering>(tc, patterns.getContext());
 
-  StringRef getArgument() const override { return "convert-onnx-to-harx"; }
-
-  StringRef getDescription() const override {
-    return "Lower ONNX ops to HARX ops.";
-  }
-
-  // Make sure that we have a valid default constructor and copy
-  // constructor to make sure that the options are initialized properly.
-  ONNXToHARXLoweringPass() = default;
-  ONNXToHARXLoweringPass(const ONNXToHARXLoweringPass &pass)
-      : PassWrapper<ONNXToHARXLoweringPass, OperationPass<ModuleOp>>() {}
-  void runOnOperation() final;
-};
-} // end anonymous namespace.
-
-void getONNXToHARXOneOpPatterns(RewritePatternSet &patterns) {
-  MLIRContext *context = patterns.getContext();
-  populateWithGenerated(patterns);
-  patterns.insert<ONNXSumOpPatternEnhancedRecursion>(context);
+  // patterns.insert<OnnxToARXAddOpLowering>(ctx);
+  // patterns.insert<OnnxToARXAddOpLowering>(ctx);
 }
 
-void getONNXToHARXMultipleOpPatterns(RewritePatternSet &patterns) {
-  MLIRContext *context = patterns.getContext();
-  patterns.insert<replaceONNXAddPattern>(context);
-  // patterns.insert<replaceONNXMatMulAddPattern1>(context);
-  // patterns.insert<replaceONNXMatMulAddPattern2>(context);
-  // patterns.insert<replaceONNXReluConvPattern>(context);
-  // patterns.insert<replaceONNXLogSoftmaxPattern>(context);
-  // Shape inference for newly-added operations.
-  getShapeInferencePatterns(patterns);
-}
-
-void ONNXToHARXLoweringPass::runOnOperation() {
-  llvm::outs() << "ONNXToHARXLoweringPass::runOnOperation\n";
-  llvm::outs() << "ONNXToHARXLoweringPass::runOnOperation\n";
-  llvm::outs() << "ONNXToHARXLoweringPass::runOnOperation\n";
-  llvm::outs() << "ONNXToHARXLoweringPass::runOnOperation\n";
-  llvm::outs() << "ONNXToHARXLoweringPass::runOnOperation\n";
-  llvm::outs() << "ONNXToHARXLoweringPass::runOnOperation\n";
-  
-  LLVM_DEBUG(llvm::dbgs() << "ONNXToHARXLoweringPass::runOnOperation\n");
-  ModuleOp module = getOperation();
-
-  // The first thing to define is the conversion target. This will define the
-  // final target for this lowering.
-  ConversionTarget target(getContext());
-
-  // Enable reporting on ARX unsupported ops when specifying
-  // `--opt-report=ARXUnsupportedOps`.
-  OnnxToHARXLoweringConfiguration::reportOnARXUnsupportedOps =
-      OnnxToHARXLoweringConfiguration::optReportARXUnsupportedOps;
-
-  // We define the specific operations, or dialects, that are legal targets for
-  // this lowering.
-  target.addLegalDialect<ONNXDialect, harx::HARXDialect, KrnlDialect,
-      func::FuncDialect, arith::ArithDialect>();
-
-  // NOTE: if we change the order of calling combinedPatterns and single op
-  // patterns, make sure to change the order in DevicePlacement.cpp also to make
-  // them synced.
-
-  // Combined ONNX ops to HARX lowering.
-  // There are some combinations of ONNX ops that can be lowering into a single
-  // HARX op, e.g. ONNXMatMul and ONNXAdd can be lowered to HARXMatmul.
-  // The lowering of such combinations should be done before the lowering of
-  // a single ONNX Op, because the single op lowering might have conditions that
-  // prohibit the combined ops lowering happened.
-  RewritePatternSet combinedPatterns(&getContext());
-  onnx_mlir::getONNXToHARXMultipleOpPatterns(combinedPatterns);
-
-  // It's ok to fail.
-  (void)applyPatternsAndFoldGreedily(module, std::move(combinedPatterns));
-
-  // Run the unknown dimension analysis to help check equality of unknown
-  // dimensions at compile time.
-  onnx_mlir::DimAnalysis dimAnalysis(module);
-  dimAnalysis.analyze();
-
-  // // Single ONNX to HARX operation lowering.
-  // RewritePatternSet patterns(&getContext());
-  // onnx_mlir::getONNXToHARXOneOpPatterns(patterns);
-
-  // This is to make sure we don't want to alloc any MemRef at this high-level
-  // representation.
-  target.addIllegalOp<mlir::memref::AllocOp>();
-  target.addIllegalOp<mlir::memref::DeallocOp>();
-
-  // With the target and rewrite patterns defined, we can now attempt the
-  // conversion. The conversion will signal failure if any of our `illegal`
-  // operations were not converted successfully.
-  if (failed(applyPartialConversion(module, target, std::move(patterns))))
-    signalPassFailure();
-}
-
-std::unique_ptr<Pass> createONNXToHARXPass() {
-  return std::make_unique<ONNXToHARXLoweringPass>();
-}
-
+} // namespace harx
 } // namespace onnx_mlir

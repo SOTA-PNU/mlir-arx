@@ -33,7 +33,7 @@
 #include "src/Accelerators/ARX/Compiler/ARXCompilerOptions.hpp"
 #include "src/Accelerators/ARX/Compiler/ARXCompilerUtils.hpp"
 #include "src/Accelerators/ARX/Dialect/HARX/HARXOps.hpp"
-#include "src/Accelerators/ARX/Dialect/LARX/LARXOps.hpp"
+// #include "src/Accelerators/ARX/Dialect/LARX/LARXOps.hpp"
 #include "src/Accelerators/ARX/Pass/ARXPasses.hpp"
 #include "src/Compiler/CompilerOptions.hpp"
 #include "src/Compiler/CompilerPasses.hpp"
@@ -61,10 +61,9 @@ void addPassesARX(mlir::OwningOpRef<mlir::ModuleOp> &module,
     // pm.addPass(onnx_mlir::createRewriteONNXForHARXPass());
     // pm.addPass(onnx_mlir::createSimplifyShapeRelatedOpsPass());
   // }
-  // pm.addPass(onnx_mlir::createRewriteONNXForHARXPass());
   pm.addNestedPass<func::FuncOp>(onnx_mlir::createShapeInferencePass());
-  pm.addPass(onnx_mlir::createONNXToHARXPass());
   pm.addPass(mlir::createCanonicalizerPass());
+  pm.addPass(onnx_mlir::createONNXToHARXPass());
 
 }
 

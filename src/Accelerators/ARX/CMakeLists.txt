@@ -51,7 +51,7 @@ add_onnx_mlir_library(OMARXAccel
   OMAccelerator
   OMHARXOps
   OMONNXToHARX
-  OMLARXOps
+  # OMLARXOps
   # OMZHighToZLow
   # OMZLowOps
   # OMZLowToLLVM

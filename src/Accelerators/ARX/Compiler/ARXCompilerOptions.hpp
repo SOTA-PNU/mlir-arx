@@ -39,17 +39,17 @@
 namespace onnx_mlir {
 
 typedef enum {
-  EmitZNONE,
+  EmitANONE,
   EmitHARXIR,
   EmitLARXIR,
 } ARXEmissionTargetType;
 
-typedef enum {
-  QualifyingOps,    /* Any ops that qualify for NNPA will go on NNPA. */
-  FasterOps,        /* Only qualifying ops that are faster on NNPA */
-  FasterOpsWSU,     /* FasterOps with With Stick and Unstick (WSU) cost.*/
-  MuchFasterOpsWSU, /* FasterOpsWSU only if significantly faster. */
-} ARXPlacementHeuristic;
+// typedef enum {
+//   QualifyingOps,    /* Any ops that qualify for NNPA will go on NNPA. */
+//   FasterOps,        /* Only qualifying ops that are faster on NNPA */
+//   FasterOpsWSU,     /* FasterOps with With Stick and Unstick (WSU) cost.*/
+//   MuchFasterOpsWSU, /* FasterOpsWSU only if significantly faster. */
+// } ARXPlacementHeuristic;
 
 extern llvm::cl::OptionCategory OnnxMlirOptions;
 extern llvm::cl::OptionCategory OnnxMlirCommonOptions;

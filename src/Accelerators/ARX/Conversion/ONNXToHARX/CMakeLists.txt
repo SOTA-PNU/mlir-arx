@@ -4,6 +4,7 @@ add_onnx_mlir_rewriter(HARXToONNX)
 add_onnx_mlir_library(OMONNXToHARX
   # ONNXLegalityCheck.cpp
   ONNXToHARX.cpp
+  ONNXToHARXPass.cpp
   # ONNXToHARXCommon.cpp
 
   DEPENDS

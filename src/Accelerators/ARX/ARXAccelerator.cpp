@@ -25,7 +25,7 @@
 // #include "src/Accelerators/ARX/Conversion/ZHighToZLow/ZHighToZLow.hpp"
 // #include "src/Accelerators/ARX/Conversion/ZLowToLLVM/ZLowToLLVM.hpp"
 #include "src/Accelerators/ARX/Dialect/HARX/HARXOps.hpp"
-#include "src/Accelerators/ARX/Dialect/LARX/LARXOps.hpp"
+// #include "src/Accelerators/ARX/Dialect/LARX/LARXOps.hpp"
 #include "src/Accelerators/ARX/ARXAccelerator.hpp"
 #include "src/Accelerators/ARX/Pass/ARXPasses.hpp"
 // #include "src/Accelerators/ARX/Support/ARXLimit.hpp"
@@ -82,7 +82,7 @@ void ARXAccelerator::registerDialects(mlir::DialectRegistry &registry) const {
   llvm::outs() << "Registering dialects for ARX accelerator\n";
   
   registry.insert<onnx_mlir::harx::HARXDialect>();
-  registry.insert<onnx_mlir::larx::LARXDialect>();
+  // registry.insert<onnx_mlir::larx::LARXDialect>();
 }
 
 void ARXAccelerator::registerPasses(int optLevel) const {
@@ -105,11 +105,10 @@ void ARXAccelerator::registerPasses(int optLevel) const {
       }
   void ARXAccelerator::conversionTargetONNXToKrnl(
       mlir::ConversionTarget &target) const{
+        // target.addLegalDialect<harx::HARXDialect>();
       }
   void ARXAccelerator::rewritePatternONNXToKrnl(mlir::RewritePatternSet &patterns,
       mlir::TypeConverter &typeConverter, mlir::MLIRContext *ctx) const{
-        
-
   }
 
   int64_t ARXAccelerator::getDefaultAllocAlignment(

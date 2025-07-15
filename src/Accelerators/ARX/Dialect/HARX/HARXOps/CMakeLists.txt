@@ -1,2 +1,2 @@
-add_subdirectory(Stick)
-add_subdirectory(Unstick)
+# add_subdirectory(Stick)
+# add_subdirectory(Unstick)

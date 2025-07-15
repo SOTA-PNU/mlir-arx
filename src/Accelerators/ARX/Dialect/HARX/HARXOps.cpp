@@ -42,26 +42,26 @@ using namespace mlir;
 namespace mlir {
 
 LogicalResult OpTrait::impl::verifySameOperandsAndResultLayout(Operation *op) {
-  if (failed(verifyAtLeastNOperands(op, 1)) ||
-      failed(verifyAtLeastNResults(op, 1)))
-    return failure();
+  // if (failed(verifyAtLeastNOperands(op, 1)) ||
+  //     failed(verifyAtLeastNResults(op, 1)))
+  //   return failure();
 
-  onnx_mlir::harx::ZTensorEncodingAttr::DataLayout layout =
-      onnx_mlir::harx::getZTensorLayout(op->getResult(0).getType());
+  // onnx_mlir::harx::ZTensorEncodingAttr::DataLayout layout =
+  //     onnx_mlir::harx::getZTensorLayout(op->getResult(0).getType());
 
-  if (layout == onnx_mlir::harx::ZTensorEncodingAttr::DataLayout::UNDEFINED)
-    return success();
+  // if (layout == onnx_mlir::harx::ZTensorEncodingAttr::DataLayout::UNDEFINED)
+  //   return success();
 
-  for (auto result : llvm::drop_begin(op->getResults())) {
-    if (onnx_mlir::harx::getZTensorLayout(result.getType()) != layout)
-      return op->emitOpError()
-             << "requires the same layout for all operands and results";
-  }
-  for (auto oprd : op->getOperands()) {
-    if (onnx_mlir::harx::getZTensorLayout(oprd.getType()) != layout)
-      return op->emitOpError()
-             << "requires the same layout for all operands and results";
-  }
+  // for (auto result : llvm::drop_begin(op->getResults())) {
+  //   if (onnx_mlir::harx::getZTensorLayout(result.getType()) != layout)
+  //     return op->emitOpError()
+  //            << "requires the same layout for all operands and results";
+  // }
+  // for (auto oprd : op->getOperands()) {
+  //   if (onnx_mlir::harx::getZTensorLayout(oprd.getType()) != layout)
+  //     return op->emitOpError()
+  //            << "requires the same layout for all operands and results";
+  // }
   return success();
 }
 
@@ -70,153 +70,153 @@ LogicalResult OpTrait::impl::verifySameOperandsAndResultLayout(Operation *op) {
 namespace onnx_mlir {
 namespace harx {
 
-std::vector<Type> getZHighAuxSplitResultType(
-    Value input, int64_t axis, ArrayAttr split) {
-  Type elementType = mlir::cast<ShapedType>(input.getType()).getElementType();
-  std::vector<Type> outputTypes;
-  if (split.size() == 0) {
-    llvm_unreachable("Unsupported split (size==0)");
-  } else {
-    ArrayRef<int64_t> inputShape =
-        mlir::cast<RankedTensorType>(input.getType()).getShape();
-    int64_t splitNum = split.size();
-    for (int i = 0; i < splitNum; i++) {
-      SmallVector<int64_t> outputShape;
-      for (unsigned int dim = 0; dim < inputShape.size(); dim++) {
-        outputShape.emplace_back(
-            (dim == axis) ? mlir::cast<IntegerAttr>(split[dim]).getInt()
-                          : inputShape[dim]);
-      }
-      outputTypes.emplace_back(RankedTensorType::get(outputShape, elementType));
-    }
-  }
-  return outputTypes;
-}
+// std::vector<Type> getZHighAuxSplitResultType(
+//     Value input, int64_t axis, ArrayAttr split) {
+//   Type elementType = mlir::cast<ShapedType>(input.getType()).getElementType();
+//   std::vector<Type> outputTypes;
+//   if (split.size() == 0) {
+//     llvm_unreachable("Unsupported split (size==0)");
+//   } else {
+//     ArrayRef<int64_t> inputShape =
+//         mlir::cast<RankedTensorType>(input.getType()).getShape();
+//     int64_t splitNum = split.size();
+//     for (int i = 0; i < splitNum; i++) {
+//       SmallVector<int64_t> outputShape;
+//       for (unsigned int dim = 0; dim < inputShape.size(); dim++) {
+//         outputShape.emplace_back(
+//             (dim == axis) ? mlir::cast<IntegerAttr>(split[dim]).getInt()
+//                           : inputShape[dim]);
+//       }
+//       outputTypes.emplace_back(RankedTensorType::get(outputShape, elementType));
+//     }
+//   }
+//   return outputTypes;
+// }
 
 //===----------------------------------------------------------------------===//
 // arx Attribute
 //===----------------------------------------------------------------------===//
 
-Attribute ZTensorEncodingAttr::parse(AsmParser &parser, Type type) {
-  if (failed(parser.parseLess()))
-    return {};
-  // Parse the data as a dictionary.
-  DictionaryAttr dict;
-  if (failed(parser.parseAttribute(dict)))
-    return {};
-  if (failed(parser.parseGreater()))
-    return {};
+// Attribute ZTensorEncodingAttr::parse(AsmParser &parser, Type type) {
+//   if (failed(parser.parseLess()))
+//     return {};
+//   // Parse the data as a dictionary.
+//   DictionaryAttr dict;
+//   if (failed(parser.parseAttribute(dict)))
+//     return {};
+//   if (failed(parser.parseGreater()))
+//     return {};
 
-  ZTensorEncodingAttr::DataLayout dataLayout =
-      ZTensorEncodingAttr::DataLayout::UNDEFINED;
+//   ZTensorEncodingAttr::DataLayout dataLayout =
+//       ZTensorEncodingAttr::DataLayout::UNDEFINED;
 
-  // Process the data from the parsed dictionary value into struct-like data.
-  for (const NamedAttribute &attr : dict) {
-    if (attr.getName() == "dataLayout") {
-      StringAttr layoutAttr = mlir::dyn_cast<StringAttr>(attr.getValue());
-      if (!layoutAttr) {
-        parser.emitError(
-            parser.getNameLoc(), "expected a string value for data layout");
-        return {};
-      }
-      StringRef strVal = layoutAttr.getValue();
-      if (strVal.equals_insensitive(LAYOUT_1D)) {
-        dataLayout = ZTensorEncodingAttr::DataLayout::_1D;
-      } else if (strVal.equals_insensitive(LAYOUT_2D)) {
-        dataLayout = ZTensorEncodingAttr::DataLayout::_2D;
-      } else if (strVal.equals_insensitive(LAYOUT_2DS)) {
-        dataLayout = ZTensorEncodingAttr::DataLayout::_2DS;
-      } else if (strVal.equals_insensitive(LAYOUT_3D)) {
-        dataLayout = ZTensorEncodingAttr::DataLayout::_3D;
-      } else if (strVal.equals_insensitive(LAYOUT_3DS)) {
-        dataLayout = ZTensorEncodingAttr::DataLayout::_3DS;
-      } else if (strVal.equals_insensitive(LAYOUT_4D)) {
-        dataLayout = ZTensorEncodingAttr::DataLayout::_4D;
-      } else if (strVal.equals_insensitive(LAYOUT_4DS)) {
-        dataLayout = ZTensorEncodingAttr::DataLayout::_4DS;
-      } else if (strVal.equals_insensitive(LAYOUT_NCHW)) {
-        dataLayout = ZTensorEncodingAttr::DataLayout::NCHW;
-      } else if (strVal.equals_insensitive(LAYOUT_NHWC)) {
-        dataLayout = ZTensorEncodingAttr::DataLayout::NHWC;
-      } else if (strVal.equals_insensitive(LAYOUT_HWCK)) {
-        dataLayout = ZTensorEncodingAttr::DataLayout::HWCK;
-      } else if (strVal.equals_insensitive(LAYOUT_FICO)) {
-        dataLayout = ZTensorEncodingAttr::DataLayout::FICO;
-      } else if (strVal.equals_insensitive(LAYOUT_ZRH)) {
-        dataLayout = ZTensorEncodingAttr::DataLayout::ZRH;
-      } else if (strVal.equals_insensitive(LAYOUT_BFICO)) {
-        dataLayout = ZTensorEncodingAttr::DataLayout::BFICO;
-      } else if (strVal.equals_insensitive(LAYOUT_BZRH)) {
-        dataLayout = ZTensorEncodingAttr::DataLayout::BZRH;
-      } else {
-        parser.emitError(
-            parser.getNameLoc(), "unexpected dimension level type: ")
-            << strVal;
-        return {};
-      }
-    } else {
-      parser.emitError(parser.getNameLoc(), "unexpected key: ")
-          << attr.getName().str();
-      return {};
-    }
-  }
-  // Construct struct-like storage for attribute.
-  return parser.getChecked<ZTensorEncodingAttr>(
-      parser.getContext(), dataLayout);
-}
+//   // Process the data from the parsed dictionary value into struct-like data.
+//   for (const NamedAttribute &attr : dict) {
+//     if (attr.getName() == "dataLayout") {
+//       StringAttr layoutAttr = mlir::dyn_cast<StringAttr>(attr.getValue());
+//       if (!layoutAttr) {
+//         parser.emitError(
+//             parser.getNameLoc(), "expected a string value for data layout");
+//         return {};
+//       }
+//       StringRef strVal = layoutAttr.getValue();
+//       if (strVal.equals_insensitive(LAYOUT_1D)) {
+//         dataLayout = ZTensorEncodingAttr::DataLayout::_1D;
+//       } else if (strVal.equals_insensitive(LAYOUT_2D)) {
+//         dataLayout = ZTensorEncodingAttr::DataLayout::_2D;
+//       } else if (strVal.equals_insensitive(LAYOUT_2DS)) {
+//         dataLayout = ZTensorEncodingAttr::DataLayout::_2DS;
+//       } else if (strVal.equals_insensitive(LAYOUT_3D)) {
+//         dataLayout = ZTensorEncodingAttr::DataLayout::_3D;
+//       } else if (strVal.equals_insensitive(LAYOUT_3DS)) {
+//         dataLayout = ZTensorEncodingAttr::DataLayout::_3DS;
+//       } else if (strVal.equals_insensitive(LAYOUT_4D)) {
+//         dataLayout = ZTensorEncodingAttr::DataLayout::_4D;
+//       } else if (strVal.equals_insensitive(LAYOUT_4DS)) {
+//         dataLayout = ZTensorEncodingAttr::DataLayout::_4DS;
+//       } else if (strVal.equals_insensitive(LAYOUT_NCHW)) {
+//         dataLayout = ZTensorEncodingAttr::DataLayout::NCHW;
+//       } else if (strVal.equals_insensitive(LAYOUT_NHWC)) {
+//         dataLayout = ZTensorEncodingAttr::DataLayout::NHWC;
+//       } else if (strVal.equals_insensitive(LAYOUT_HWCK)) {
+//         dataLayout = ZTensorEncodingAttr::DataLayout::HWCK;
+//       } else if (strVal.equals_insensitive(LAYOUT_FICO)) {
+//         dataLayout = ZTensorEncodingAttr::DataLayout::FICO;
+//       } else if (strVal.equals_insensitive(LAYOUT_ZRH)) {
+//         dataLayout = ZTensorEncodingAttr::DataLayout::ZRH;
+//       } else if (strVal.equals_insensitive(LAYOUT_BFICO)) {
+//         dataLayout = ZTensorEncodingAttr::DataLayout::BFICO;
+//       } else if (strVal.equals_insensitive(LAYOUT_BZRH)) {
+//         dataLayout = ZTensorEncodingAttr::DataLayout::BZRH;
+//       } else {
+//         parser.emitError(
+//             parser.getNameLoc(), "unexpected dimension level type: ")
+//             << strVal;
+//         return {};
+//       }
+//     } else {
+//       parser.emitError(parser.getNameLoc(), "unexpected key: ")
+//           << attr.getName().str();
+//       return {};
+//     }
+//   }
+//   // Construct struct-like storage for attribute.
+//   return parser.getChecked<ZTensorEncodingAttr>(
+//       parser.getContext(), dataLayout);
+// }
 
-void ZTensorEncodingAttr::print(AsmPrinter &printer) const {
-  // Print the struct-like storage in dictionary fashion.
-  printer << "<{dataLayout = ";
-  switch (getDataLayout()) {
-  case DataLayout::_1D:
-    printer << "\"" << LAYOUT_1D << "\"";
-    break;
-  case DataLayout::_2D:
-    printer << "\"" << LAYOUT_2D << "\"";
-    break;
-  case DataLayout::_2DS:
-    printer << "\"" << LAYOUT_2DS << "\"";
-    break;
-  case DataLayout::_3D:
-    printer << "\"" << LAYOUT_3D << "\"";
-    break;
-  case DataLayout::_3DS:
-    printer << "\"" << LAYOUT_3DS << "\"";
-    break;
-  case DataLayout::_4D:
-    printer << "\"" << LAYOUT_4D << "\"";
-    break;
-  case DataLayout::_4DS:
-    printer << "\"" << LAYOUT_4DS << "\"";
-    break;
-  case DataLayout::NCHW:
-    printer << "\"" << LAYOUT_NCHW << "\"";
-    break;
-  case DataLayout::NHWC:
-    printer << "\"" << LAYOUT_NHWC << "\"";
-    break;
-  case DataLayout::HWCK:
-    printer << "\"" << LAYOUT_HWCK << "\"";
-    break;
-  case DataLayout::FICO:
-    printer << "\"" << LAYOUT_FICO << "\"";
-    break;
-  case DataLayout::ZRH:
-    printer << "\"" << LAYOUT_ZRH << "\"";
-    break;
-  case DataLayout::BFICO:
-    printer << "\"" << LAYOUT_BFICO << "\"";
-    break;
-  case DataLayout::BZRH:
-    printer << "\"" << LAYOUT_BZRH << "\"";
-    break;
-  case DataLayout::UNDEFINED:
-    llvm_unreachable("Unexpected data layout");
-    break;
-  }
-  printer << "}>";
-}
+// void ZTensorEncodingAttr::print(AsmPrinter &printer) const {
+//   // Print the struct-like storage in dictionary fashion.
+//   printer << "<{dataLayout = ";
+//   switch (getDataLayout()) {
+//   case DataLayout::_1D:
+//     printer << "\"" << LAYOUT_1D << "\"";
+//     break;
+//   case DataLayout::_2D:
+//     printer << "\"" << LAYOUT_2D << "\"";
+//     break;
+//   case DataLayout::_2DS:
+//     printer << "\"" << LAYOUT_2DS << "\"";
+//     break;
+//   case DataLayout::_3D:
+//     printer << "\"" << LAYOUT_3D << "\"";
+//     break;
+//   case DataLayout::_3DS:
+//     printer << "\"" << LAYOUT_3DS << "\"";
+//     break;
+//   case DataLayout::_4D:
+//     printer << "\"" << LAYOUT_4D << "\"";
+//     break;
+//   case DataLayout::_4DS:
+//     printer << "\"" << LAYOUT_4DS << "\"";
+//     break;
+//   case DataLayout::NCHW:
+//     printer << "\"" << LAYOUT_NCHW << "\"";
+//     break;
+//   case DataLayout::NHWC:
+//     printer << "\"" << LAYOUT_NHWC << "\"";
+//     break;
+//   case DataLayout::HWCK:
+//     printer << "\"" << LAYOUT_HWCK << "\"";
+//     break;
+//   case DataLayout::FICO:
+//     printer << "\"" << LAYOUT_FICO << "\"";
+//     break;
+//   case DataLayout::ZRH:
+//     printer << "\"" << LAYOUT_ZRH << "\"";
+//     break;
+//   case DataLayout::BFICO:
+//     printer << "\"" << LAYOUT_BFICO << "\"";
+//     break;
+//   case DataLayout::BZRH:
+//     printer << "\"" << LAYOUT_BZRH << "\"";
+//     break;
+//   case DataLayout::UNDEFINED:
+//     llvm_unreachable("Unexpected data layout");
+//     break;
+//   }
+//   printer << "}>";
+// }
 
 //===----------------------------------------------------------------------===//
 // arxDialect

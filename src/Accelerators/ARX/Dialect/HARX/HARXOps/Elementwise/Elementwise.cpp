@@ -26,45 +26,45 @@ LogicalResult HARXAddOp::inferShapes(
   return inferShapeForUnaryOps(this->getOperation());
 }
 
-//===----------------------------------------------------------------------===//
-// SubOp
+// //===----------------------------------------------------------------------===//
+// // SubOp
 
-LogicalResult HARXSubOp::inferShapes(
-    std::function<void(Region &)> doShapeInference) {
-  return inferShapeForUnaryOps(this->getOperation());
-}
+// LogicalResult HARXSubOp::inferShapes(
+//     std::function<void(Region &)> doShapeInference) {
+//   return inferShapeForUnaryOps(this->getOperation());
+// }
 
-//===----------------------------------------------------------------------===//
-// MulOp
+// //===----------------------------------------------------------------------===//
+// // MulOp
 
-LogicalResult HARXMulOp::inferShapes(
-    std::function<void(Region &)> doShapeInference) {
-  return inferShapeForUnaryOps(this->getOperation());
-}
+// LogicalResult HARXMulOp::inferShapes(
+//     std::function<void(Region &)> doShapeInference) {
+//   return inferShapeForUnaryOps(this->getOperation());
+// }
 
-//===----------------------------------------------------------------------===//
-// DivOp
+// //===----------------------------------------------------------------------===//
+// // DivOp
 
-LogicalResult HARXDivOp::inferShapes(
-    std::function<void(Region &)> doShapeInference) {
-  return inferShapeForUnaryOps(this->getOperation());
-}
+// LogicalResult HARXDivOp::inferShapes(
+//     std::function<void(Region &)> doShapeInference) {
+//   return inferShapeForUnaryOps(this->getOperation());
+// }
 
-//===----------------------------------------------------------------------===//
-// ReluOp
+// //===----------------------------------------------------------------------===//
+// // ReluOp
 
-LogicalResult HARXReluOp::inferShapes(
-    std::function<void(Region &)> doShapeInference) {
-  return inferShapeForUnaryOps(this->getOperation());
-}
+// LogicalResult HARXReluOp::inferShapes(
+//     std::function<void(Region &)> doShapeInference) {
+//   return inferShapeForUnaryOps(this->getOperation());
+// }
 
-//===----------------------------------------------------------------------===//
-// TanhOp
+// //===----------------------------------------------------------------------===//
+// // TanhOp
 
-LogicalResult HARXTanhOp::inferShapes(
-    std::function<void(Region &)> doShapeInference) {
-  return inferShapeForUnaryOps(this->getOperation());
-}
+// LogicalResult HARXTanhOp::inferShapes(
+//     std::function<void(Region &)> doShapeInference) {
+//   return inferShapeForUnaryOps(this->getOperation());
+// }
 
 } // namespace harx
 } // namespace onnx_mlir
