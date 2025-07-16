@@ -127,7 +127,7 @@ void populateHARXToLLVMConversionPattern(mlir::RewritePatternSet &patterns,
     mlir::LLVMTypeConverter &typeConverter, mlir::MLIRContext *ctx) {
   ApiRegistry apiRegistry = RegisterAllApis(ctx);
   // clang-format off
-  patterns.insert<HARXBinaryElementwiseOpLowering<onnx_mlir::harx::HARXAddOp>>(ctx, typeConverter, apiRegistry);
+  // patterns.insert<HARXBinaryElementwiseOpLowering<onnx_mlir::harx::HARXAddOp>>(ctx, typeConverter, apiRegistry);
   // clang-format on
 }
 

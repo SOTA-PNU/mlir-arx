@@ -147,7 +147,14 @@ def HARXAddOp : HARX_Op<"Add", [Pure, SameOperandsAndResultLayout,
   // Operands and result are restricted to MLIR tensor types only.
   let arguments = (ins AnyTensor:$X,
                        AnyTensor:$Y,
-                       OptionalAttr<StrAttr>:$onnx_node_name);
+                       OptionalAttr<StrAttr>:$node_name,
+                       OptionalAttr<F32Attr>:$x_scale,
+                       OptionalAttr<F32Attr>:$x_offset,
+                       OptionalAttr<F32Attr>:$y_scale,
+                       OptionalAttr<F32Attr>:$y_offset,
+                       OptionalAttr<F32Attr>:$out_scale,
+                       OptionalAttr<F32Attr>:$out_offset);
+
   let results   = (outs AnyTensor:$Out);
 
   let extraClassDefinition = [{

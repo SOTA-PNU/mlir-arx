@@ -30,6 +30,7 @@ namespace onnx_mlir {
 
 /// Add pass for lowering ONNX ops to HARX ops.
 std::unique_ptr<mlir::Pass> createONNXToHARXPass();
+std::unique_ptr<mlir::Pass> createHARXToLLVMPass();
 
 void configureOnnxToHARXLoweringPass(bool reportOnARXUnsupportedOps);
 

@@ -1,6 +1,7 @@
 add_onnx_mlir_library(OMHARXToLLVM
   HARXToLLVM.cpp
   HARXToLLVMCommon.cpp
+  HARXToLLVMPass.cpp
 
   DEPENDS
 

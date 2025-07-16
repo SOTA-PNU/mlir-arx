@@ -64,7 +64,10 @@ void addPassesARX(mlir::OwningOpRef<mlir::ModuleOp> &module,
   pm.addNestedPass<func::FuncOp>(onnx_mlir::createShapeInferencePass());
   pm.addPass(mlir::createCanonicalizerPass());
   pm.addPass(onnx_mlir::createONNXToHARXPass());
-
+  pm.addPass(mlir::createCanonicalizerPass());
+  pm.addPass(onnx_mlir::createHARXToLLVMPass());
+  pm.addPass(mlir::createCanonicalizerPass());
+  
 }
 
 } // namespace onnx_mlir
