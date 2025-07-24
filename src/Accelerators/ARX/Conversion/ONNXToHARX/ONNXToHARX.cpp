@@ -14,10 +14,13 @@
 
 #include "llvm/Support/Debug.h"
 
+#include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/PatternMatch.h"
 #include "mlir/Dialect/Affine/Analysis/Utils.h"
 #include "mlir/Dialect/Affine/Utils.h"
 #include "mlir/IR/AsmState.h"
 #include "mlir/IR/DialectResourceBlobManager.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"   
 
 #include "src/Accelerators/ARX/Conversion/ONNXToHARX/ONNXToHARX.hpp"
 #include "src/Accelerators/ARX/Dialect/HARX/HARXOps.hpp"
@@ -123,20 +126,16 @@ struct ConvertConstI64ToI8 : public OpRewritePattern<ONNXConstantOp> {
 
   LogicalResult matchAndRewrite(ONNXConstantOp op,
                                 PatternRewriter &rewriter) const override {
-    llvm::outs() << "ConvertConstI64ToI8 0001\n";
                                   // 1) Only fold dense i64 constants
-    auto denseAttr = op.getValueAttr().dyn_cast<DenseElementsAttr>();
+    auto denseAttr = mlir::dyn_cast<DenseElementsAttr>(op.getValueAttr());
     if (!denseAttr) 
       return failure();
-    llvm::outs() << "ConvertConstI64ToI8 0000\n";
-    auto shapedTy = denseAttr.getType().dyn_cast<ShapedType>();
+    auto shapedTy = mlir::dyn_cast<ShapedType>(denseAttr.getType());
     if (!shapedTy) 
       return failure();
-    llvm::outs() << "ConvertConstI64ToI8 0002\n";
-    auto eltTy = shapedTy.getElementType().dyn_cast<IntegerType>();
+    auto eltTy = mlir::dyn_cast<IntegerType>(shapedTy.getElementType());
     if (!eltTy || eltTy.getWidth() != 64)
       return failure();
-    llvm::outs() << "ConvertConstI64ToI8 0003\n";
     // 2) Build new 8-bit elements, clamping to [0,255]
     SmallVector<APInt> newValues;
     newValues.reserve(denseAttr.getNumElements());
@@ -149,13 +148,11 @@ struct ConvertConstI64ToI8 : public OpRewritePattern<ONNXConstantOp> {
     // 3) Create the new tensor<…xi8> type
     auto ui8Ty = IntegerType::get(op.getContext(), /*width=*/8, mlir::IntegerType::Unsigned);
     auto newShapedTy = shapedTy.clone(ui8Ty);
-    llvm::outs() << "ConvertConstI64ToI8 0005\n";
     // 4) Make a new DenseElementsAttr<…xi8>
     auto newDense = DenseElementsAttr::get(newShapedTy, newValues);
-    llvm::outs() << "ConvertConstI64ToI8 0006\n";
     // 5) Replace with a new ONNXConstantOp carrying the i8 attr
     //    Note: ONNXConstantOp builder wants (loc, resultTypes, operands, attributes)
-    auto loc = op.getLoc();
+    // auto loc = op.getLoc();
     auto newConst = rewriter.replaceOpWithNewOp<ONNXConstantOp>(
         op,
         /*resultTypes*/ TypeRange{newShapedTy},
@@ -169,6 +166,17 @@ struct ConvertConstI64ToI8 : public OpRewritePattern<ONNXConstantOp> {
   }
 };
 
+struct EraseEntryPointPattern
+    : public mlir::OpRewritePattern<ONNXEntryPointOp> {
+  using OpRewritePattern::OpRewritePattern;
+
+  mlir::LogicalResult matchAndRewrite(
+      ONNXEntryPointOp op,
+      mlir::PatternRewriter &rewriter) const override {
+    rewriter.eraseOp(op);          // marker 제거
+    return mlir::success();
+  }
+};
 
 
 struct OnnxToARXFoldAdderOpLowering : public OpConversionPattern<ONNXCastOp> {
@@ -195,7 +203,7 @@ struct OnnxToARXFoldAdderOpLowering : public OpConversionPattern<ONNXCastOp> {
     auto constOp = addOp.getOperand(1).getDefiningOp<ONNXConstantOp>();
     if (!constOp)
       return failure();
-    auto denseAttr = constOp.getValueAttr().dyn_cast<DenseElementsAttr>();
+    auto denseAttr = dyn_cast<DenseElementsAttr>(constOp.getValueAttr());
     if (!denseAttr || !denseAttr.getElementType().isInteger(64))
       return failure();
 
@@ -209,7 +217,7 @@ struct OnnxToARXFoldAdderOpLowering : public OpConversionPattern<ONNXCastOp> {
     // auto newConst = rewriter.create<ONNXConstantOp>(
     //     castOut.getLoc(), newType, newDenseAttr);
 
-    auto newConst = rewriter.create<ONNXConstantOp>(
+    auto newConst = rewriter.create<HARXConstantOp>(
       castOut.getLoc(),
         /*resultTypes*/ TypeRange{newType},
         /*operands*/     ValueRange{},
@@ -219,7 +227,7 @@ struct OnnxToARXFoldAdderOpLowering : public OpConversionPattern<ONNXCastOp> {
 
     // 6) Create the fused harx.Add on ui8 (x:uint8 + constant:uint8).
     Value x = castIn.getOperand();             // original ui8 input
-    Value c = newConst.getOutput();            // the new ui8 constant
+    Value c = newConst.getResult();            // the new ui8 constant
     auto newAdd = rewriter.create<HARXAddOp>(
         castOut.getLoc(),
         /*resultType=*/castOut.getResult().getType(),
@@ -245,18 +253,62 @@ struct OnnxToARXFoldAdderOpLowering : public OpConversionPattern<ONNXCastOp> {
     
   }
 };
+struct EraseFuncOnnxPattern
+    : public mlir::OpRewritePattern<func::FuncOp> {
+  using OpRewritePattern::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(func::FuncOp fn,
+                                PatternRewriter &rewriter) const override {
+    auto fnType = fn.getFunctionType();
+    bool hasAttr = false;
+
+    // Check args
+    for (unsigned i = 0, e = fnType.getNumInputs(); i < e; ++i)
+      if (fn.getArgAttr(i, "onnx.name")) {
+        hasAttr = true;
+        break;
+      }
+    // Check results only if no attr found yet
+    if (!hasAttr)
+      for (unsigned i = 0, e = fnType.getNumResults(); i < e; ++i)
+        if (fn.getResultAttr(i, "onnx.name")) {
+          hasAttr = true;
+          break;
+        }
+
+    // If no onnx.name anywhere, do nothing
+    if (!hasAttr)
+      return failure();
+
+    // Remove them in-place
+    rewriter.startOpModification(fn);
+    // strip from args
+    for (unsigned i = 0, e = fnType.getNumInputs(); i < e; ++i)
+      if (fn.getArgAttr(i, "onnx.name"))
+        fn.removeArgAttr(i, "onnx.name");
+    // strip from results
+    for (unsigned i = 0, e = fnType.getNumResults(); i < e; ++i)
+      if (fn.getResultAttr(i, "onnx.name"))
+        fn.removeResultAttr(i, rewriter.getStringAttr("onnx.name"));
+    rewriter.finalizeOpModification(fn);
+
+    return success();
+  }
+};
 
 
 void populateONNXToARXConversionPattern(TypeConverter &tc, mlir::RewritePatternSet &patterns, mlir::MLIRContext *ctx, bool enableParallel) {
   llvm::outs() << "populateONNXToARXConversionPattern CALLED!!!!\n";
     llvm::outs() << HARXAddOp::getOperationName() << "\n";
     llvm::outs() << ONNXCastOp::getOperationName() << "\n";  
-  // patterns.add<ConvertConstI64ToI8>(patterns.getContext());
+  
   patterns.add<OnnxToARXFoldAdderOpLowering>(tc, patterns.getContext());
-  // patterns.add<OnnxToARXCastOpLowering>(tc, patterns.getContext());
+  // patterns.add<ConvertConstI64ToI8>(patterns.getContext());
+  // patterns.add<ONNXConstAsTensorPattern>(patterns.getContext());
+  
+  patterns.add<EraseEntryPointPattern>(patterns.getContext());
+  patterns.add<EraseFuncOnnxPattern>(patterns.getContext());
 
-  // patterns.insert<OnnxToARXAddOpLowering>(ctx);
-  // patterns.insert<OnnxToARXAddOpLowering>(ctx);
 }
 
 } // namespace harx

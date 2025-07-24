@@ -18,6 +18,7 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/Transforms/Passes.h"
 #include "llvm/Support/Debug.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 
 #include "src/Accelerators/ARX/Compiler/ARXCompilerUtils.hpp"
 #include "src/Accelerators/ARX/Conversion/ONNXToHARX/ONNXToHARX.hpp"
@@ -30,7 +31,8 @@
 #include "src/Accelerators/ARX/Pass/ARXPasses.hpp"
 // #include "src/Accelerators/ARX/Support/ARXLimit.hpp"
 #include "src/Compiler/CompilerOptions.hpp"
-#include <iostream>
+#include "mlir/Dialect/Arith/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/Bufferization/Transforms/FuncBufferizableOpInterfaceImpl.h"  // ← for Func
 
 #include <memory>
 
@@ -80,9 +82,18 @@ void ARXAccelerator::addPasses(mlir::OwningOpRef<mlir::ModuleOp> &module,
 void ARXAccelerator::registerDialects(mlir::DialectRegistry &registry) const {
   LLVM_DEBUG(llvm::dbgs() << "Registering dialects for ARX accelerator\n");
   llvm::outs() << "Registering dialects for ARX accelerator\n";
-  
+  // 1) Dialect 자체 등록
+  registry.insert<
+    mlir::arith::ArithDialect,
+    mlir::func::FuncDialect,
+    mlir::bufferization::BufferizationDialect
+  >();
+
+  mlir::arith::registerBufferizableOpInterfaceExternalModels(registry);
+  mlir::bufferization::func_ext::registerBufferizableOpInterfaceExternalModels(registry);
+
+  registry.insert<mlir::bufferization::BufferizationDialect>();
   registry.insert<onnx_mlir::harx::HARXDialect>();
-  // registry.insert<onnx_mlir::larx::LARXDialect>();
 }
 
 void ARXAccelerator::registerPasses(int optLevel) const {

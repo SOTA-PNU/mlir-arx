@@ -48,7 +48,7 @@ bool isCompatibleWithARXLevel(std::string inputARXLevel) {
 
 // The ARX maximum supported dimension index size value by using
 // zdnn_get_arx_max_dim_idx_size() This value depends on HW.
-static constexpr int64_t ARX_Z16_MAXIMUM_DIMENSION_INDEX_SIZE = 32768;
+// static constexpr int64_t ARX_Z16_MAXIMUM_DIMENSION_INDEX_SIZE = 32768;
 
 int64_t ARXGetMaxForDim(int64_t dim, int64_t rank) {
   assert(rank >= 0 && "expected positive rank");

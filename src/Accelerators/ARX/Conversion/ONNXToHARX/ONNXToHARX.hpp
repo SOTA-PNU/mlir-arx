@@ -20,7 +20,6 @@
 #include "src/Dialect/Mlir/IndexExpr.hpp"
 
 /// Default 4K alignment for sticked tensors.
-static constexpr int64_t gAlignment = 4096;
 
 namespace onnx_mlir {
 namespace harx {

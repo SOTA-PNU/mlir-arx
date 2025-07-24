@@ -16,7 +16,7 @@ add_onnx_mlir_library(OMHARXOps
   # HARXOps/Pooling/Pooling.cpp
   # HARXOps/Softmax/Softmax.cpp
   # HARXOps/Unstick/Unstick.cpp
-  # HARXOps/Stick/Stick.cpp
+  HARXOps/Stick/Stick.cpp
 
   DEPENDS
   OMLayoutHelper

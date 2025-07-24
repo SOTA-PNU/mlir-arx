@@ -14,11 +14,14 @@
 #define HARX_OPS
 
 include "mlir/IR/AttrTypeBase.td"
+include "mlir/IR/BuiltinAttributes.td"
 include "mlir/IR/OpBase.td"
+
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "src/Interface/ShapeHelperOpInterface.td"
 include "src/Interface/ShapeInferenceOpInterface.td"
 include "src/IR/AttrBase.td"
+
 
 //===----------------------------------------------------------------------===//
 // HARX Dialect
@@ -40,84 +43,6 @@ def HARX_Dialect : Dialect {
 class HARX_Attr<string name, list<Trait> traits = []>
 	: BaseLayoutAttr<HARX_Dialect, name, traits>;
 
-// // ztensor encoding attribute.
-// def ZTensorEncodingAttr : HARX_Attr<"ZTensorEncoding"> {
-//   let hasCustomAssemblyFormat = 1;
-
-//   let description = [{
-//     An attribute to encode information on properties of ztensors. A tensor with
-//     this encoding attribute indicates that it is a ztensor whose type is
-//     the original type of the pre-stickified data.
-
-//     `dataLayout` indicates the data layout of the pre-stickified data.
-
-//     TODO: should we add an affine_map to describe how the data is stickified?
-
-//     Example:
-
-//     ```mlir
-//     #ZAIU_NHWC= #HARX.encoding<{
-//       dataLayout = "nhwc"
-//     }>
-
-//     ... tensor<8x8xf64, #ZAIU_NHWC> ...
-//     ```
-//   }];
-
-//   // Data in ztensor encoding.
-//   let parameters = (ins
-//     // A original data layout of the pre-stickified data.
-//     "ZTensorEncodingAttr::DataLayout":$dataLayout
-//   );
-
-//   let extraClassDeclaration = [{
-//     enum class DataLayout {
-//       UNDEFINED, _1D, _2D, _2DS, _3D, _3DS, _4D, _4DS,
-//       NCHW, NHWC, HWCK,
-//       FICO, ZRH, BFICO, BZRH
-//     };
-//   }];
-
-//   let cppNamespace = "::onnx_mlir::harx";
-// }
-
-// // Whether a ztensor type has the specified layout.
-// class DataLayoutOfPred<string layout> : And<[
-//   CPred<"(mlir::cast<::mlir::RankedTensorType>($_self)) &&"
-//         "(mlir::dyn_cast_or_null<ZTensorEncodingAttr>(mlir::cast<::mlir::RankedTensorType>($_self).getEncoding())) &&"
-//         "(mlir::cast<ZTensorEncodingAttr>(mlir::cast<::mlir::RankedTensorType>($_self).getEncoding()).getDataLayout()"
-//         " == ZTensorEncodingAttr::DataLayout::" # layout # ")">
-// ]>;
-
-// So far ZTensor supports only F16 for stickified data.
-// class ZTensorOf<string layout, list<int> ranks> :
-//     Type<And<[TensorOf<[F16]>.predicate, HasAnyRankOfPred<ranks>,
-//               DataLayoutOfPred<layout>]>,
-//          !interleave(!foreach(rank, ranks, rank # "D"), "/") # " " #
-//          TensorOf<[F16]>.summary # " with layout " # layout,
-//          "::mlir::TensorType">;
-
-// def UnrankedZTensor : UnrankedTensorOf<[F16]>;
-// def ZTensor_1D: AnyTypeOf<[UnrankedZTensor, ZTensorOf<"_1D", [1]>]>;
-// def ZTensor_2D: AnyTypeOf<[UnrankedZTensor, ZTensorOf<"_2D", [2]>]>;
-// def ZTensor_2DS: AnyTypeOf<[UnrankedZTensor, ZTensorOf<"_2DS", [2]>]>;
-// def ZTensor_3D: AnyTypeOf<[UnrankedZTensor, ZTensorOf<"_3D", [3]>]>;
-// def ZTensor_3DS: AnyTypeOf<[UnrankedZTensor, ZTensorOf<"_3DS", [3]>]>;
-// def ZTensor_4D: AnyTypeOf<[UnrankedZTensor, ZTensorOf<"_4D", [4]>]>;
-// def ZTensor_4DS: AnyTypeOf<[UnrankedZTensor, ZTensorOf<"_4DS", [4]>]>;
-// def ZTensor_NHWC: AnyTypeOf<[UnrankedZTensor, ZTensorOf<"NHWC", [4]>]>;
-// def ZTensor_NCHW: AnyTypeOf<[UnrankedZTensor, ZTensorOf<"NCHW", [4]>]>;
-// def ZTensor_HWCK: AnyTypeOf<[UnrankedZTensor, ZTensorOf<"HWCK", [4]>]>;
-// def ZTensor_FICO: AnyTypeOf<[UnrankedZTensor, ZTensorOf<"FICO", [2, 3]>]>;
-// def ZTensor_ZRH: AnyTypeOf<[UnrankedZTensor, ZTensorOf<"ZRH", [2, 3]>]>;
-// def ZTensor_BFICO: AnyTypeOf<[UnrankedZTensor, ZTensorOf<"BFICO", [2, 3]>]>;
-// def ZTensor_BZRH: AnyTypeOf<[UnrankedZTensor, ZTensorOf<"BZRH", [2, 3]>]>;
-
-// def AnyZTensor: AnyTypeOf<[ZTensor_1D, ZTensor_2D, ZTensor_3D, ZTensor_4D,
-//       ZTensor_2DS, ZTensor_3DS, ZTensor_4DS,
-//       ZTensor_NCHW, ZTensor_NHWC, ZTensor_HWCK,
-//       ZTensor_FICO, ZTensor_ZRH, ZTensor_BFICO, ZTensor_BZRH]>;
-
 //===----------------------------------------------------------------------===//
 // HARX Operations
 //===----------------------------------------------------------------------===//
@@ -135,6 +60,35 @@ def SameOperandsAndResultLayout: NativeOpTrait<"SameOperandsAndResultLayout">;
 class HARX_Op<string mnemonic, list<Trait> traits = []> :
     Op<HARX_Dialect, mnemonic, traits>;
 
+def HARXConstantOp : HARX_Op<"Constant", [Pure,
+    DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
+    DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
+      
+  let summary = "Constant tensor operation";
+  let description = [{
+    The constant operation produces a tensor with the same shape and values
+    as the DenseElementsAttr attribute 'value'.
+  }];
+
+  let arguments = (ins ElementsAttr:$value);
+  let results   = (outs TensorOf<[UI8]>:$result);
+
+  // let builders = [OpBuilder<(ins TensorOf<[UI8]>:$value)>];
+
+  let extraClassDefinition = [{
+    onnx_mlir::ONNXOpShapeHelper *HARXConstantOp::getShapeHelper(mlir::Operation *op,
+        mlir::ArrayRef<mlir::Value> oper,
+        onnx_mlir::IndexExprBuilder *ieb,
+        onnx_mlir::IndexExprScope *scope) {
+      onnx_mlir::ONNXOpShapeHelper *sh =
+          new HARXBinaryOpShapeHelper(op, oper, ieb, scope);
+      assert(sh && "failed to allocate shape helper");
+      return sh;
+    }
+  }];
+}
+
+
 def HARXAddOp : HARX_Op<"Add", [Pure, SameOperandsAndResultLayout,
     DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
     DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
@@ -145,8 +99,8 @@ def HARXAddOp : HARX_Op<"Add", [Pure, SameOperandsAndResultLayout,
   }];
 
   // Operands and result are restricted to MLIR tensor types only.
-  let arguments = (ins AnyTensor:$X,
-                       AnyTensor:$Y,
+  let arguments = (ins TensorOf<[UI8]>:$X,
+                       TensorOf<[UI8]>:$Y,
                        OptionalAttr<StrAttr>:$node_name,
                        OptionalAttr<F32Attr>:$x_scale,
                        OptionalAttr<F32Attr>:$x_offset,
@@ -155,7 +109,7 @@ def HARXAddOp : HARX_Op<"Add", [Pure, SameOperandsAndResultLayout,
                        OptionalAttr<F32Attr>:$out_scale,
                        OptionalAttr<F32Attr>:$out_offset);
 
-  let results   = (outs AnyTensor:$Out);
+  let results   = (outs TensorOf<[UI8]>:$Out);
 
   let extraClassDefinition = [{
     onnx_mlir::ONNXOpShapeHelper *HARXAddOp::getShapeHelper(mlir::Operation *op,

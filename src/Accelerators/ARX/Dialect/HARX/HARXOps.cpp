@@ -36,6 +36,7 @@
 #include "src/Dialect/ONNX/ONNXOps/ShapeHelper.hpp"
 #include "src/Support/Diagnostic.hpp"
 #include "src/Support/TypeUtilities.hpp"
+#include "src/Dialect/ONNX/ONNXOps.hpp"
 
 using namespace mlir;
 

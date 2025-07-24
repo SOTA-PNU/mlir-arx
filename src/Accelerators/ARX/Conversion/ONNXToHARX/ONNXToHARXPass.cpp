@@ -65,41 +65,42 @@ void ONNXToHARXLoweringPass::runOnOperation() {
 
   ConversionTarget target(getContext());
 
-  target.addLegalDialect<ONNXDialect, harx::HARXDialect, func::FuncDialect, arith::ArithDialect>();
+  target.addLegalDialect<harx::HARXDialect, func::FuncDialect, arith::ArithDialect>();
 
   onnx_mlir::DimAnalysis dimAnalysis(module);
   dimAnalysis.analyze();
 
-  // target.addDynamicallyLegalOp<ONNXConstantOp>(
-  //   [](ONNXConstantOp op) {
-  //     auto resTy = mlir::cast<mlir::TensorType>(op.getResult().getType()).getElementType();
-  //     return resTy.isUnsignedInteger(8);
-  //   }
-  // );
+  target.addIllegalOp<ONNXEntryPointOp>();
 
-  target.addDynamicallyLegalOp<ONNXCastOp>(
-    [](ONNXCastOp op) {
-      auto resTy = mlir::cast<mlir::TensorType>(op.getResult().getType()).getElementType();
-      return !resTy.isUnsignedInteger(8);
-    }
-  );
+  target.addDynamicallyLegalOp<func::FuncOp>([](func::FuncOp fn) {
+    // Check all arguments for an "onnx.name" attribute:
+    for (unsigned i = 0, e = fn.getFunctionType().getNumInputs(); i < e; ++i)
+      if (fn.getArgAttr(i, "onnx.name"))
+        return false;
+    // Check all results for an "onnx.name" attribute:
+    for (unsigned i = 0, e = fn.getFunctionType().getNumResults(); i < e; ++i)
+      if (fn.getResultAttr(i, "onnx.name"))
+        return false;
+    return true;  // no onnx.name attrs → legal
+  });
 
-  // target.addIllegalOp<ONNXAddOp>();
-  // target.addIllegalDialect<ONNXDialect>();
-  
-  // llvm::outs() << "1rewritePatternONNXToKrnl CALLED!!!!\n";
   // llvm::outs() << "2rewritePatternONNXToKrnl CALLED!!!!\n";
   MyTypeConverter krnlTypeConverter;
+  
   RewritePatternSet patterns(&getContext());
+
   onnx_mlir::harx::populateONNXToARXConversionPattern(krnlTypeConverter, patterns, &getContext(), false);
+
+
 
   module.walk([&](Operation *op) {
     llvm::outs() << "Processing operation: " << op->getName() << "\n";
     llvm::outs() << "Found ONNX operation: " << op->getDialect() << "\n";
   });
 
-  if (failed(applyPartialConversion(module, target, std::move(patterns))))
+  if (failed(applyPartialConversion(module, target, std::move(patterns)))){
     signalPassFailure();
+  }
 }
 
 std::unique_ptr<Pass> createONNXToHARXPass() {

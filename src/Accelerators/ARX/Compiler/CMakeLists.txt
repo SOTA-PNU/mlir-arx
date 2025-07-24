@@ -29,6 +29,7 @@ add_onnx_mlir_library(OMARXCompilerUtils
   ${ARX_ONNX_MLIR_BIN_ROOT}
 
   LINK_LIBS PUBLIC
+  MLIRConvertToLLVMPass
   OMARXCompilerOptions
   OMCompilerPasses
 

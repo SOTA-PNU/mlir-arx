@@ -21,11 +21,13 @@
 #include "mlir/Conversion/LLVMCommon/Pattern.h"
 
 #include "src/Accelerators/ARX/Conversion/HARXToLLVM/HARXToLLVM.hpp"
-#include "src/Accelerators/ARX/Conversion/HARXToLLVM/HARXToLLVMCommon.hpp"
 #include "src/Accelerators/ARX/Dialect/HARX/HARXOps.hpp"
 #include "src/Accelerators/ARX/Support/LayoutHelper.hpp"
 #include "src/Conversion/KrnlToLLVM/KrnlToLLVMHelper.hpp"
 #include "src/Dialect/Mlir/DialectBuilder.hpp"
+#include "src/Dialect/ONNX/ONNXOps.hpp"
+
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 
 using namespace mlir;
 using namespace onnx_mlir;
@@ -33,101 +35,178 @@ using namespace onnx_mlir;
 namespace onnx_mlir {
 namespace larx {
 
-// static bool FUNC_CALL_FOR_DLF16_CONVERSION = false;
-// static bool SIMD_FOR_DLF16_CONVERSION = true;
+static func::FuncOp getOrInsertElemAdd(ModuleOp module,
+                                       PatternRewriter &rewriter,
+                                       mlir::FunctionType fnTy) {
+  constexpr StringLiteral kName("elemadd_add");
+  if (auto fn = module.lookupSymbol<func::FuncOp>(kName))
+    return fn;
 
-// zdnn_data_layouts UNDEFINED_ZDNN_LAYOUT = static_cast<zdnn_data_layouts>(255);
+  OpBuilder::InsertionGuard g(rewriter);
+  rewriter.setInsertionPointToStart(module.getBody());
 
-// Obtain a zDNN API for an elementwise ZLow operation.
-template <>
-API APIFor<harx::HARXAddOp>() {
-  return API::HARX_ADD;
+  auto p = rewriter.create<func::FuncOp>(module.getLoc(), kName, fnTy);
+  p.setPrivate();
+  return p;
+
 }
 
-template <typename BinaryElementwiseOp>
-class HARXBinaryElementwiseOpLowering : public ConvertToLLVMPattern {
-public:
-  explicit HARXBinaryElementwiseOpLowering(MLIRContext *context,
-      LLVMTypeConverter &lowering_, ApiRegistry apiRegistry)
-      : ConvertToLLVMPattern(
-            BinaryElementwiseOp::getOperationName(), context, lowering_) {
-    this->apiRegistry = apiRegistry;
-  }
+static memref::GlobalOp getOrInsertElemAddGlobal(ModuleOp module, 
+                                                 PatternRewriter &rewriter,
+                                                 MemRefType bufTy) {
+  constexpr llvm::StringLiteral kName("elemadd_scratch");
 
-  LogicalResult matchAndRewrite(Operation *op, ArrayRef<Value> operands,
-      ConversionPatternRewriter &rewriter) const override {
-    // ModuleOp module = op->getParentOfType<ModuleOp>();
-    // Location loc = op->getLoc();
-    // BinaryElementwiseOp binaryOp = mlir::cast<BinaryElementwiseOp>(op);
-    // typename BinaryElementwiseOp::Adaptor operandAdaptor(operands);
+  if (auto g = module.lookupSymbol<memref::GlobalOp>(kName))
+    return g;
 
-    // Value input1 = operandAdaptor.getX();
-    // Value input2 = operandAdaptor.getY();
-    // Value shape = operandAdaptor.getShape();
-    // Value output = operandAdaptor.getOut();
-    // Type llvmElementTy = typeConverter->convertType(
-    //     mlir::cast<MemRefType>(op->getOperand(0).getType()).getElementType());
+  OpBuilder::InsertionGuard g(rewriter);
+  rewriter.setInsertionPointToStart(module.getBody());
 
-    // ZTensorHelper zTensorHelper =
-    //     ZTensorHelper(rewriter, loc, module, apiRegistry);
+  // mutable 전역: constant = false
+  auto global = rewriter.create<memref::GlobalOp>(
+      module.getLoc(),                    // 위치
+      /*sym_name=*/kName,     // 심볼 이름
+      /*sym_visibility=*/rewriter.getStringAttr("private"),
+      /*type=*/bufTy,
+      /*initial_value=*/Attribute(),   // 초기값 없음
+      /*constant=*/false,
+      /*alignment=*/IntegerAttr());    // 정렬(옵션)
 
-    // // Get zDNN data type.
-    // zdnn_data_types zDNNDataType = llvmTypeToZDNNType(llvmElementTy);
+  return global;
+}
 
-    // // Get zDNN data layout.
-    // zdnn_data_layouts zDNNDataLayout =
-    //     convertLayoutAttrToZDNNDataLayout(0, binaryOp.getLayoutAttr());
 
-    // // Get the dimensions of the original shape (the shape before stickifying)
-    // // used for creating a zTensor.
-    // std::vector<Value> dims =
-    //     getDimsFromShapeMemRef(rewriter, loc, module, shape,
-    //         /*layout=*/zDNNDataLayout);
 
-    // // Create the first zTensor input.
-    // Value stickI8Ptr = zTensorHelper.getAlignedI8Ptr(input1);
-    // ZTensor inputZTensor1 =
-    //     zTensorHelper.getZTensor(stickI8Ptr, /*dataType=*/zDNNDataType,
-    //         /*layout=*/zDNNDataLayout, /*originalDims=*/dims,
-    //         /*isTransformed=*/true);
 
-    // // Create the second zTensor input.
-    // stickI8Ptr = zTensorHelper.getAlignedI8Ptr(input2);
-    // ZTensor inputZTensor2 = zTensorHelper.getZTensor(
-    //     /*preTransformedDescPtr=*/inputZTensor1.preTransformedDescPtr,
-    //     /*transformedDescPtr=*/inputZTensor1.transformedDescPtr,
-    //     /*bufferSize=*/inputZTensor1.bufferSize,
-    //     /*alignedBuffer=*/stickI8Ptr,
-    //     /*isTransformed=*/true);
+struct LowerAddWithCall : public ConvertToLLVMPattern {
+  LowerAddWithCall(LLVMTypeConverter &converter, MLIRContext *ctx)
+      : ConvertToLLVMPattern(harx::HARXAddOp::getOperationName(),
+                             ctx, converter) {}
 
-    // // Create an output zTensor.
-    // stickI8Ptr = zTensorHelper.getAlignedI8Ptr(output);
-    // ZTensor outputZTensor = zTensorHelper.getZTensor(
-    //     /*preTransformedDescPtr=*/inputZTensor1.preTransformedDescPtr,
-    //     /*transformedDescPtr=*/inputZTensor1.transformedDescPtr,
-    //     /*bufferSize=*/inputZTensor1.bufferSize,
-    //     /*alignedBuffer=*/stickI8Ptr,
-    //     /*isTransformed=*/true);
+  LogicalResult
+  matchAndRewrite(Operation *ops, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const override {
+    
+    llvm::outs() << "sadfasdfddd" << "??\n";
+    llvm::outs() << "sadfasdfddd" << "??\n";
+    llvm::outs() << "sadfasdfddd" << "??\n";
+    llvm::outs() << "sadfasdfddd" << "??\n";
+    llvm::outs() << "sadfasdfddd" << "??\n";
 
-    // // Ready to call a zDNN elementwise API.
-    // callApi(rewriter, loc, module, apiRegistry, APIFor<BinaryElementwiseOp>(),
-    //     {toOpaquePtr(rewriter, loc, module, inputZTensor1.val),
-    //         toOpaquePtr(rewriter, loc, module, inputZTensor2.val),
-    //         toOpaquePtr(rewriter, loc, module, outputZTensor.val)});
+    auto op = cast<harx::HARXAddOp>(ops);
+    Location loc = op.getLoc();
+    auto module = ops->getParentOfType<mlir::ModuleOp>();
+    
+    auto argType = mlir::cast<RankedTensorType>(op.getOperand(0).getType());
+    auto mTy = MemRefType::get(argType.getShape(), argType.getElementType());
+    
+    auto fnArgTy = TypeRange{mTy, mTy, mTy, rewriter.getIntegerType(32)};
+    auto fnTy = rewriter.getFunctionType(fnArgTy, TypeRange{});
+    
+    // auto bufTy = MemRefType::get({1, 10, 10}, rewriter.getIntegerType(8, false));
+    auto output_var = getOrInsertElemAddGlobal(module, rewriter, mTy);
+    auto output_catch = rewriter.create<memref::GetGlobalOp>(loc, mTy, output_var.getSymNameAttr()).getResult();
+    
+    
+    mlir::Value arglhs = op.getOperand(0);
+    if (mlir::isa<mlir::RankedTensorType>(arglhs.getType())) {  
+      llvm::outs() << "arglhs" << "??\n";
+      // auto allocated = rewriter.create<memref::AllocaOp>(loc, mTy);
+      // arglhs = rewriter.create<bufferization::ToMemrefOp>(loc, allocated.getType(), arglhs, allocated).getResult();
+      arglhs = rewriter.create<bufferization::ToMemrefOp>(loc, mTy, arglhs).getResult();
+    }
 
-    // rewriter.eraseOp(op);
+    mlir::Value argrhs = op.getOperand(1);
+    if (mlir::isa<mlir::RankedTensorType>(argrhs.getType())) {  
+      llvm::outs() << "argrhs" << "??\n";
+      // auto allocated = rewriter.create<memref::AllocaOp>(loc, mTy);
+      // argrhs = rewriter.create<bufferization::ToMemrefOp>(loc, allocated.getType(), argrhs, allocated).getResult();
+      argrhs = rewriter.create<bufferization::ToMemrefOp>(loc, mTy, argrhs).getResult();
+    }
+    // if (mlir::isa<mlir::RankedTensorType>(argrhs.getType())) { 
+    //   llvm::outs() << "argrhs" << "??\n";
+    //   argrhs = rewriter.create<bufferization::ToMemrefOp>(loc, mTy, op.getOperand(1)).getResult();
+    // }
+    
+    auto funcss = getOrInsertElemAdd(module, rewriter, fnTy);
+    auto cstI32 = rewriter.create<arith::ConstantIntOp>(
+        loc,
+        100,
+        rewriter.getI32Type()).getResult();
+
+    auto callOp = rewriter.create<func::CallOp>(loc, funcss, ValueRange { arglhs, argrhs, output_catch, cstI32});
+    
+    auto output_callOp = rewriter.create<bufferization::ToTensorOp>(loc, argType, callOp.getOperand(2));
+    // output_callOp.setRestrict(true);
+
+    rewriter.replaceOp(ops, output_callOp);
+                    
     return success();
   }
-
-private:
-  ApiRegistry apiRegistry;
 };
+
+
+static memref::GlobalOp getOrInsertElemAddGlobalScrach(ModuleOp module, 
+                                                 PatternRewriter &rewriter,
+                                                 MemRefType bufTy,
+                                                mlir::ElementsAttr default_value) {
+  constexpr llvm::StringLiteral kName("elemadd_scratch_val");
+
+  if (auto g = module.lookupSymbol<memref::GlobalOp>(kName))
+    return g;
+
+  OpBuilder::InsertionGuard g(rewriter);
+  rewriter.setInsertionPointToStart(module.getBody());
+
+  // mutable 전역: constant = false
+  auto global = rewriter.create<memref::GlobalOp>(
+      module.getLoc(),                    // 위치
+      /*sym_name=*/kName,     // 심볼 이름
+      /*sym_visibility=*/rewriter.getStringAttr("private"),
+      /*type=*/bufTy,
+      /*initial_value=*/default_value,   // 초기값 없음
+      /*constant=*/true,
+      /*alignment=*/rewriter.getI64IntegerAttr(8));    // 정렬(옵션)
+
+  return global;
+}
+
+struct ConstantToGlobal : public ConvertToLLVMPattern {
+  ConstantToGlobal(LLVMTypeConverter &converter, MLIRContext *ctx)
+      : ConvertToLLVMPattern(harx::HARXConstantOp::getOperationName(),
+                             ctx, converter) {}
+
+  LogicalResult
+  matchAndRewrite(Operation *ops, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const override {
+
+    auto op = cast<harx::HARXConstantOp>(ops);
+    Location loc = op.getLoc();
+    auto module = ops->getParentOfType<mlir::ModuleOp>();
+    
+    auto argType = mlir::cast<RankedTensorType>(op.getValue().getType());
+    auto mTy = MemRefType::get(argType.getShape(), argType.getElementType());
+
+    auto global_param = getOrInsertElemAddGlobalScrach(module, rewriter, mTy, op.getValue());
+    auto output_catch = rewriter.create<memref::GetGlobalOp>(loc, mTy, global_param.getSymNameAttr()).getResult();
+    auto output_global = rewriter.create<bufferization::ToTensorOp>(loc, argType, output_catch);
+
+    rewriter.replaceOp(op, output_global.getResult());
+
+    return success();
+  }
+};
+
+
+
 
 void populateHARXToLLVMConversionPattern(mlir::RewritePatternSet &patterns,
     mlir::LLVMTypeConverter &typeConverter, mlir::MLIRContext *ctx) {
-  ApiRegistry apiRegistry = RegisterAllApis(ctx);
   // clang-format off
+  
   // patterns.insert<HARXBinaryElementwiseOpLowering<onnx_mlir::harx::HARXAddOp>>(ctx, typeConverter, apiRegistry);
+  patterns.add<ConstantToGlobal>(typeConverter, ctx);
+  patterns.add<LowerAddWithCall>(typeConverter, ctx);
   // clang-format on
 }
 
