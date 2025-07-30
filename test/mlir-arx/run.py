@@ -54,7 +54,15 @@ for test in list_of_test_onnx_to_arx:
         # Clean up the temporary file
         os.remove(tmp_file_path)
 
+print()
 print("Summary:")
 print(f"Total tests run: {pass_test}")
 print(f"✅ Total tests passed: {run_test}")
 print(f"❌ Total tests failed: {error_test}")
+
+if error_test > 0:
+    raise Exception(f"Some tests failed. Total failed: {run_test}/{pass_test}")
+else:
+    print(f"All tests passed successfully! {run_test}/{pass_test}")
+    
+# %%
