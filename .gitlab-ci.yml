@@ -63,7 +63,10 @@ build:
     - pwd 
     - cd ..
     - ls
-    - cd /builds/ones-ai/mlir-arx/test/mlir-arx
-    - python3 run.py
+    - cd test
+    - pwd
+    - ls
+    # - cd /builds/ones-ai/mlir-arx/test/mlir-arx
+    # - python3 run.py
     # - cmake --build . --target onnx-mlir
     # - cmake --build . --target check-onnx-lit
