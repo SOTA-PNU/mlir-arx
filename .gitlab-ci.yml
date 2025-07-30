@@ -54,6 +54,7 @@ build:
   before_script:
     - pwd
     - mkdir -p build && cd build
+    - export PATH=$PATH:/builds/ones-ai/mlir-arx/build/Release/bin
   script:
     - ls
     - rm -rf /builds/ones-ai/mlir-arx/third_party/*
