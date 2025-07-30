@@ -16,8 +16,12 @@ list_of_file_for_onnx_to_arx = [
     ("./mlir/uint_model_1x10x10.mlir", "./harx/uint_model_1x10x10.mlir"),
 ]
 
+pass_test = 0 
+error_test = 0
+run_test = 0
 for test in list_of_test_onnx_to_arx:
     for (input_file, pred_file) in list_of_file_for_onnx_to_arx:
+        pass_test += 1
         tmp_name = generate_random_string(30)
         tmp_file_path = os.path.join('output', tmp_name)
         
@@ -42,10 +46,15 @@ for test in list_of_test_onnx_to_arx:
             print("Differences found:")
             for line in diff:
                 print(line, end='')
+            error_test += 1
         else:
             print("✅ Test passed for: " + input_file)
+            run_test += 1
         
         # Clean up the temporary file
         os.remove(tmp_file_path)
 
-# %%
+print("Summary:")
+print(f"Total tests run: {pass_test}")
+print(f"✅ Total tests passed: {run_test}")
+print(f"❌ Total tests failed: {error_test}")
