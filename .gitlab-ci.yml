@@ -49,7 +49,7 @@ build:
     WORK_DIR: /workdir
     LLVM_PROJECT_ROOT: ${WORK_DIR}/llvm-project
     NPROC: 40
-    ACCEL: NNPA
+    ACCEL: ARX
 
   before_script:
     - pwd

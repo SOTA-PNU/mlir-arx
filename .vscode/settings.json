@@ -16,12 +16,13 @@
 
   // cmake configure 시 넘길 인자
   "cmake.configureArgs": [
-    "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-18",
-    "-DCMAKE_C_COMPILER=/usr/bin/clang-18",
+    "-DCMAKE_CXX_COMPILER=/workdir/llvm-project/build/bin/clang++",
+    "-DCMAKE_C_COMPILER=/workdir/llvm-project/build/bin/clang-20",
     "-DCMAKE_BUILD_TYPE=Debug",
     "-DLLVM_ENABLE_ASSERTIONS=OFF",
     "-DMLIR_DIR=${env:LLVM_PROJECT_ROOT}/build/lib/cmake/mlir",
-    "-DONNX_MLIR_ACCELERATORS=${env:ACCEL}"
+    "-DONNX_MLIR_ACCELERATORS=${env:ACCEL}",
+    "-DCMAKE_LIBRARY_PATH=/workdir/llvm-project/build/lib;${CMAKE_LIBRARY_PATH}",
   ],
   "files.associations": {
     "typeindex": "cpp",
@@ -98,7 +99,8 @@
     "thread": "cpp",
     "cfenv": "cpp",
     "valarray": "cpp",
-    "variant": "cpp"
+    "variant": "cpp",
+    "*.def": "c"
   },
   "C_Cpp.default.compilerPath": "/usr/bin/clang++-18",
 }
