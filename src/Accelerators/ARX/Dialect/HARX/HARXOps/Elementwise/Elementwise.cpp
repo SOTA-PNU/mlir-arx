@@ -11,7 +11,6 @@ LogicalResult HARXConstantOp::inferShapes(
   return inferShapeForUnaryOps(this->getOperation());
 }
 
-
 LogicalResult HARXQuantizationOp::inferShapes(
     std::function<void(Region &)> doShapeInference) {
   return inferShapeForUnaryOps(this->getOperation());
@@ -56,6 +55,17 @@ LogicalResult HARXConvolutionShiftOp::inferShapes(
   // HARXConv2DOpShapeHelper shapeHelper(getOperation());
   // return shapeHelper.computeShapeAndUpdateType(
   //     inputType.getElementType(), inputType.getEncoding());
+  return success();
+}
+
+
+LogicalResult HARXTransposeOp::inferShapes(
+    std::function<void(Region &)> doShapeInference) {
+  return success();
+}
+
+LogicalResult HARXMaxPoolOp::inferShapes(
+    std::function<void(Region &)> doShapeInference) {
   return success();
 }
 

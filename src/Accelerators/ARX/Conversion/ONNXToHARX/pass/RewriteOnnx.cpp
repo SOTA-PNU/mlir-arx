@@ -52,6 +52,14 @@ mlir::LogicalResult RewriteOnnxQuantToArxPattern::matchAndRewrite(ONNXQuantizeLi
     auto yZeroPoint = op.getYZeroPoint().getDefiningOp<ONNXConstantOp>();
     if (!yZeroPoint)
         return rewriter.notifyMatchFailure(op, "y_zero_point must be constant");
+    llvm::dbgs() << "RewriteOnnxQuantToArxPattern: " << op.getOperand(0) << "\n\n\n";
+    
+    // no func dialect
+    if (op.getOperand(0).getDefiningOp()) {
+        llvm::dbgs() << "Remove ONNXQuantizeLinearOp, since it is not func dialect.\n";
+        rewriter.replaceOp(op, op.getOperand(0));
+        return mlir::success();
+    }
 
     auto scaleAttr = mlir::cast<DenseFPElementsAttr>(yScale.getValueAttr());
     auto getYScale = rewriter.getFloatAttr(scaleAttr.getElementType(), *(scaleAttr.getValues<APFloat>().begin()));
@@ -74,6 +82,18 @@ mlir::LogicalResult RewriteOnnxDequantToArxPattern::matchAndRewrite(ONNXDequanti
     auto xZeroPoint = op.getXZeroPoint().getDefiningOp<ONNXConstantOp>();
     if (!xZeroPoint)
         return rewriter.notifyMatchFailure(op, "x_zero_point must be constant");
+    
+    bool flags = true;
+    for (auto &use : op.getResult().getUses()) {
+        if (use.getOwner()->getDialect()->getNamespace() == "func") {
+            flags = false;
+        }
+    }
+    if (flags) {
+        llvm::dbgs() << "Remove ONNXDequantizeLinearOp, since it is not func dialect.\n";
+        rewriter.replaceOp(op, op.getOperand(0));
+        return mlir::success();
+    }
 
     auto ctx = rewriter.getContext();
 
@@ -140,9 +160,6 @@ mlir::LogicalResult RewriteOnnxDequantToArxPattern::matchAndRewrite(ONNXDequanti
 
 
 mlir::LogicalResult RewriteOnnxFCToArxFCPattern::matchAndRewrite(ONNXCustomOp op, mlir::PatternRewriter &rewriter) const {
-    if (auto module = op->getParentOfType<ModuleOp>()){ 
-        module.dump();
-    }
     llvm::dbgs() << "\n\n\n\n\n";
     llvm::dbgs() << "01 RewriteOnnxFCToArxFCPattern, op : " << op << "\n";
     auto defOp = op.getInputs()[0].getUses();
@@ -196,10 +213,10 @@ mlir::LogicalResult RewriteOnnxFCToArxFCPattern::matchAndRewrite(ONNXCustomOp op
     auto ui8_type = rewriter.getIntegerType(8, false);
 
     auto C_zero_point_ui8 = op.getInputs()[7];
-    auto C_zero_point_value = C_zero_point_ui8.getDefiningOp<ONNXConstantOp>().getValueAttr().cast<DenseIntElementsAttr>().getValues<APInt>()[0].getSExtValue();
+    auto C_zero_point_value = mlir::cast<DenseIntElementsAttr>(C_zero_point_ui8.getDefiningOp<ONNXConstantOp>().getValueAttr()).getValues<APInt>()[0].getSExtValue();
     auto C_zero_point_i32 = rewriter.getI32IntegerAttr(C_zero_point_value);
 
-    auto scale3_float32 = onnx_matmul_op.getAScale(); 
+    // auto scale3_float32 = onnx_matmul_op.getAScale(); 
     auto scale5_float32 = op.getInputs()[6]; // getCScale(); 
     auto w_scale3_float32 = onnx_matmul_op.getBScale(); // BScale
     // auto bScale = mlir::cast<DenseIntElementsAttr>(scale3_float32.getType());
@@ -262,22 +279,188 @@ mlir::LogicalResult RewriteOnnxFCToArxFCPattern::matchAndRewrite(ONNXCustomOp op
         use.get().setType(matmulOp.getResult().getType());
     }
 
-    // op.getResult().replaceAllUsesWith(matmulOp);
-    // customOp.getResult(0).replaceAllUsesWith(matmulOp);
-    // rewriter.eraseOp(op);
-    // rewriter.eraseOp(customOp);
-    // for (auto& addOp : customOp.getResult(0).getUses()) {
-    //     auto idx = addOp.getOperandNumber();
-    //     addOp.get().setType(matmulOp.getResult().getType());
-    // }
-
-    if (auto module = op->getParentOfType<ModuleOp>()){ 
-        module.dump();
-    }
     llvm::dbgs() << "04 fin : \n";
 
     return mlir::success();
 }
+
+
+
+mlir::LogicalResult RewriteOnnxReshapeToArxPattern::matchAndRewrite(ONNXReshapeOp op, mlir::PatternRewriter &rewriter) const {
+    llvm::dbgs() << "RewriteOnnxReshapeToArxPattern, op : " << op << "\n";
+    
+    auto input_type = op.getOperand(0).getType();
+    
+    auto ranked_input = mlir::cast<RankedTensorType>(input_type);
+    auto shape = ranked_input.getShape();
+
+    mlir::SmallVector<APInt> transpose_seq; // 0, 3, 1, 2 -> DenseAttr is End
+    mlir::SmallVector<APInt> transpose_shape; // 1,4,4 16
+    ArrayRef<int64_t> transpose_input_shape { (int64_t)shape.size() };
+
+    transpose_seq.reserve(shape.size());
+    transpose_shape.reserve(shape.size());
+    for (auto dim : {0,3,1,2}) {
+        transpose_seq.push_back(APInt(32, dim, true));
+        transpose_shape.push_back(APInt(32, shape[dim], true));
+    }
+
+    auto i32_type = rewriter.getIntegerType(32, true);
+
+    auto four_shape = RankedTensorType::get(transpose_input_shape, i32_type);
+    auto seq = DenseElementsAttr::get(mlir::cast<ShapedType>(four_shape), transpose_seq);
+    auto reshape = DenseElementsAttr::get(mlir::cast<ShapedType>(four_shape), transpose_shape);
+
+    auto constant_seq_op = rewriter.create<HARXConstantOp>(
+        op.getLoc(),
+        /*resultTypes*/ TypeRange{ four_shape },
+        /*operands*/     ValueRange{},
+        /*attrs*/        ArrayRef<NamedAttribute>{
+                           rewriter.getNamedAttr("value", seq)
+                        });
+
+    auto constant_reshape_op = rewriter.create<HARXConstantOp>(
+        op.getLoc(),
+        /*resultTypes*/ TypeRange{ four_shape },
+        /*operands*/     ValueRange{},
+        /*attrs*/        ArrayRef<NamedAttribute>{
+                           rewriter.getNamedAttr("value", reshape)
+                        });
+    
+    auto ui8_type = IntegerType::get(rewriter.getContext(), 8, mlir::IntegerType::Unsigned);
+
+    auto input_fp32_type = mlir::cast<ShapedType>(op.getOperand(0).getType());
+    auto input_ui8_array = input_fp32_type.clone(ui8_type);
+    // auto castedInput = rewriter.create<mlir::UnrealizedConversionCastOp>(op.getLoc(), input_ui8_array, op.getOperand(0)).getResult(0);
+    op.getOperand(0).setType(input_ui8_array);
+
+    auto result_fp32_type = mlir::cast<ShapedType>(op.getResult().getType());
+    auto result_ui8_array = result_fp32_type.clone(ui8_type);
+    // op.getResult().setType(result_ui8_array);
+
+    auto transpose_op = rewriter.create<HARXTransposeOp>(op.getLoc(), result_ui8_array, op.getOperand(0), constant_seq_op, constant_reshape_op);
+    rewriter.replaceOp(op, transpose_op.getResult());
+
+    return mlir::success();
+}
+
+// 강제적으로 ui8 형태로 변환함, 입력과 출력 레이어에 대해서.
+mlir::LogicalResult RewriteOnnxMaxPoolToArxPattern::matchAndRewrite(ONNXMaxPoolSingleOutOp op, mlir::PatternRewriter &rewriter) const {
+    llvm::dbgs() << "RewriteOnnxMaxPoolToArxPattern, op : " << op << "\n";
+    
+    auto fp32_result_type = mlir::cast<RankedTensorType>(op.getResult().getType());
+    auto ui8_type = rewriter.getIntegerType(8, false);
+    auto ui8_result_array = fp32_result_type.clone(ui8_type);
+    
+    auto fp32_input_type = mlir::cast<RankedTensorType>(op.getOperand().getType());
+    auto ui8_input_array = fp32_input_type.clone(ui8_type);
+    op.getOperand().setType(ui8_input_array);
+
+    auto kernel_shape = op.getKernelShapeAttr().getValue();
+    auto pad_size = op.getPadsAttr().getValue();
+    auto stride = op.getStridesAttr().getValue();
+
+    auto ui8_kernel_height = rewriter.getIntegerAttr(ui8_type, mlir::cast<IntegerAttr>(kernel_shape[0]).getInt());
+    auto ui8_kernel_width = rewriter.getIntegerAttr(ui8_type, mlir::cast<IntegerAttr>(kernel_shape[1]).getInt());
+    auto ui8_pad_size = rewriter.getIntegerAttr(ui8_type, mlir::cast<IntegerAttr>(pad_size[0]).getInt());
+    auto ui8_stride_size = rewriter.getIntegerAttr(ui8_type, mlir::cast<IntegerAttr>(stride[0]).getInt());
+    
+    auto maxpool_op = rewriter.create<HARXMaxPoolOp>(op.getLoc(), ui8_result_array, op.getOperand(), ui8_kernel_height, ui8_kernel_width, ui8_pad_size, ui8_stride_size);
+    rewriter.replaceOp(op, maxpool_op.getResult());
+
+    return mlir::success();
+}
+
+
+mlir::LogicalResult RewriteOnnxQConv2DToArxPattern::matchAndRewrite(ONNXQLinearConvOp op, mlir::PatternRewriter &rewriter) const {
+    llvm::dbgs() << "RewriteOnnxQConv2DToArxPattern, op : " << op << "\n";
+
+    // auto input_attr = op.getX().getDefiningOp<ONNXConstantOp>().getValueAttr();
+    auto kernel_attr = op.getW().getDefiningOp<ONNXConstantOp>().getValueAttr();
+    auto bias_attr = op.getB().getDefiningOp<ONNXConstantOp>().getValueAttr();
+
+    // auto scale1_float32 = op.getXScale(); 
+    // auto scale2_float32 = op.getYScale();
+    auto w_scale1_float32 = op.getWScale().getDefiningOp<ONNXConstantOp>().getValueAttr(); // BScale
+    // auto shift1_scale_int32 = compute_shift(scale1_float32, scale2_float32, w_scale1_float32, 8)
+
+    auto kernel_elem_attr = mlir::cast<DenseElementsAttr>(kernel_attr);
+    auto kernel_i8_shape = mlir::cast<ShapedType>(kernel_elem_attr.getType());
+    auto kernel_ui8_shape = kernel_i8_shape.clone(rewriter.getIntegerType(8, false));
+    
+    SmallVector<APInt> kernel_ui8;
+    kernel_ui8.reserve(kernel_elem_attr.getNumElements());
+    for (auto item : kernel_elem_attr.getValues<APInt>()) {
+        auto value = item.getSExtValue();
+        kernel_ui8.push_back(APInt(8, value + 127, false));
+    }
+    auto kernel_op = rewriter.create<HARXConstantOp>(
+        op.getLoc(),
+        /*resultTypes*/ TypeRange{ kernel_ui8_shape },
+        /*operands*/     ValueRange{},
+        /*attrs*/        ArrayRef<NamedAttribute>{
+            rewriter.getNamedAttr("value", DenseElementsAttr::get(kernel_ui8_shape, kernel_ui8))
+        });
+        
+    auto bias_elem_attr = mlir::cast<DenseIntElementsAttr>(bias_attr);
+    auto bias_i8_shape = mlir::cast<ShapedType>(bias_elem_attr.getType());
+    auto bias_ui8_shape = bias_i8_shape.clone(rewriter.getIntegerType(8, false));
+    SmallVector<APInt> bias_ui8;
+    bias_ui8.reserve(bias_elem_attr.getNumElements());
+    for (auto item : bias_elem_attr.getValues<APInt>()) {
+        auto value = item.getSExtValue();
+        bias_ui8.push_back(APInt(8, value + 127, true));
+    }
+    auto bias_dense_attr = DenseElementsAttr::get(bias_ui8_shape, bias_ui8);
+    auto bias_op = rewriter.create<HARXConstantOp>(
+        op.getLoc(),
+        /*resultTypes*/ TypeRange{ bias_ui8_shape },
+        /*operands*/     ValueRange{},
+        /*attrs*/        ArrayRef<NamedAttribute>{
+                           rewriter.getNamedAttr("value", bias_dense_attr)
+                        });
+                        
+    auto kernel_scale_attr = mlir::cast<DenseElementsAttr>(w_scale1_float32);
+    auto kernel_scale_fp32_shape = mlir::cast<ShapedType>(kernel_scale_attr.getType());
+    auto kernel_scale_i32_shape = kernel_scale_fp32_shape.clone(rewriter.getIntegerType(32, true));
+    SmallVector<APInt> kernel_scale_i32;
+    for (auto item : kernel_scale_attr.getValues<APFloat>()) {
+        // auto value = item.convertToDouble();
+        kernel_scale_i32.push_back(APInt(32, 0, true));
+    }
+    auto kernel_scale_dense_attr = DenseElementsAttr::get(kernel_scale_i32_shape, kernel_scale_i32);
+    auto kernel_scale_op = rewriter.create<HARXConstantOp>(
+        op.getLoc(),
+        /*resultTypes*/ TypeRange{ kernel_scale_i32_shape },
+        /*operands*/     ValueRange{},
+        /*attrs*/        ArrayRef<NamedAttribute>{
+                           rewriter.getNamedAttr("value", kernel_scale_dense_attr)
+                        });
+    auto ui8_type = rewriter.getIntegerType(8, false);
+    auto do_bias = rewriter.getIntegerAttr(ui8_type, 1);
+    auto do_relu = rewriter.getIntegerAttr(ui8_type, 0);
+    auto pad_size = rewriter.getIntegerAttr(ui8_type, 2);
+    auto stride_size = rewriter.getIntegerAttr(ui8_type, 1);
+
+    llvm::dbgs() << "04 RewriteOnnxQConv2DToArxPattern, op : " << op.getX() << "\n";
+    // llvm::dbgs() << "04 RewriteOnnxQConv2DToArxPattern, op : " << op.getX().getDefiningOp< << "\n";
+
+    auto conv_op = rewriter.create<HARXConvolutionShiftOp>(op.getLoc(), op.getResult().getType(), 
+                                                                op.getX().getDefiningOp()->getResult(0), 
+                                                                kernel_op, 
+                                                                kernel_scale_op, 
+                                                                bias_op, 
+                                                                do_bias, do_relu, pad_size, stride_size);
+
+    llvm::dbgs() << "RewriteOnnxQConv2DToArxPattern, conv_op : " << conv_op << "\n";
+    
+    rewriter.replaceOp(op, conv_op.getResult());
+
+    return mlir::success();
+}
+
+
+
 
 } // namespace harx
 } // namespace onnx_mlir

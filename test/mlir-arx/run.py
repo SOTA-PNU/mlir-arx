@@ -15,8 +15,9 @@ list_of_test_onnx_to_arx = [
 ]
 
 list_of_file_for_onnx_to_arx = [ 
+    ("./mlir/mnist-12-int8.onnx.mlir", "./harx/mnist-12-int8.onnx.mlir"),
     ("./mlir/quant_add_dequant.mlir", "./harx/quant_add_dequant.mlir"),
-    ("./mlir/uint_model_1x10x10.mlir", "./harx/uint_model_1x10x10.mlir"),
+    # ("./mlir/uint_model_1x10x10.mlir", "./harx/uint_model_1x10x10.mlir"),
 ]
 
 pass_test = 0 

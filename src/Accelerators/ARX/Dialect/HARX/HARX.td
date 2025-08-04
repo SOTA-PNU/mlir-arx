@@ -213,7 +213,7 @@ def HARXDequantizationOp : HARX_Op<"Dequantization", [Pure, SameOperandsAndResul
   }];
 }
 
-def HARXConvolutionShiftOp : HARX_Op<"ConvolutionShift", [Pure, SameOperandsAndResultLayout,
+def HARXConvolutionShiftOp : HARX_Op<"ConvolutionShift", [Pure,
     DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
     DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
   let summary = "HARX ConvolutionShift operation";
@@ -225,9 +225,8 @@ def HARXConvolutionShiftOp : HARX_Op<"ConvolutionShift", [Pure, SameOperandsAndR
   // Operands and result are restricted to MLIR tensor types only.
   let arguments = (ins TensorOf<[UI8]>:$input,
                        TensorOf<[UI8]>:$kernel,
-                       TensorOf<[UI8]>:$output_shift,
-                       OptionalAttr<ElementsAttr>:$bias,
-                       UI8Attr:$output_offset,
+                       TensorOf<[I32, SI32]>:$output_shift,
+                       TensorOf<[UI8]>:$bias,
                        UI8Attr:$do_bias,
                        UI8Attr:$do_relu,
                        UI8Attr:$pad_size,
@@ -277,7 +276,64 @@ def HARXMatMulOp : HARX_Op<"MatMul", [Pure,
       return sh;
     }
   }];
+}
 
+def HARXTransposeOp : HARX_Op<"Transpose", [Pure,
+    DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
+    DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
+  let summary = "HARX Transpose operation";
+  let description = [{
+    HARX operation to perform an Transpose.
+    This operation does not support broadcasting.
+  }];
+
+  // Operands and result are restricted to MLIR tensor types only.
+  let arguments = (ins TensorOf<[UI8]>:$input,
+                       TensorOf<[I32, SI32]>:$sequence, 
+                       TensorOf<[I32, SI32]>:$reshape);
+
+  let results   = (outs TensorOf<[UI8]>:$output);
+  let extraClassDefinition = [{
+    onnx_mlir::ONNXOpShapeHelper *HARXTransposeOp::getShapeHelper(mlir::Operation *op,
+        mlir::ArrayRef<mlir::Value> oper,
+        onnx_mlir::IndexExprBuilder *ieb,
+        onnx_mlir::IndexExprScope *scope) {
+      onnx_mlir::ONNXOpShapeHelper *sh =
+          new HARXMatMulOpShapeHelper(op, oper, ieb, scope);
+      assert(sh && "failed to allocate shape helper");
+      return sh;
+    }
+  }];
+}
+
+def HARXMaxPoolOp : HARX_Op<"MaxPool", [Pure,
+    DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
+    DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
+  let summary = "HARX MaxPool operation";
+  let description = [{
+    HARX operation to perform an MaxPool.
+    This operation does not support broadcasting.
+  }];
+
+  // Operands and result are restricted to MLIR tensor types only.
+  let arguments = (ins TensorOf<[UI8]>:$input,
+                       UI8Attr:$kernel_height, 
+                       UI8Attr:$kernel_width, 
+                       UI8Attr:$pad_size, 
+                       UI8Attr:$stride_size);
+
+  let results   = (outs TensorOf<[UI8]>:$output);
+  let extraClassDefinition = [{
+    onnx_mlir::ONNXOpShapeHelper *HARXMaxPoolOp::getShapeHelper(mlir::Operation *op,
+        mlir::ArrayRef<mlir::Value> oper,
+        onnx_mlir::IndexExprBuilder *ieb,
+        onnx_mlir::IndexExprScope *scope) {
+      onnx_mlir::ONNXOpShapeHelper *sh =
+          new HARXMatMulOpShapeHelper(op, oper, ieb, scope);
+      assert(sh && "failed to allocate shape helper");
+      return sh;
+    }
+  }];
 }
 
 

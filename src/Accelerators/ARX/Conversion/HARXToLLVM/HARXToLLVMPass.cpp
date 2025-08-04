@@ -145,7 +145,7 @@ module.walk([&](func::FuncOp fn) {
   // 2) Build new input types: change any strided memref to identity layout
   SmallVector<Type, 4> newInputs;
   for (Type t : oldType.getInputs()) {
-    if (auto mt = t.dyn_cast<MemRefType>()) {
+    if (auto mt = mlir::dyn_cast<MemRefType>(t)) {
       auto ctx = fn.getContext();
       // identity layout map of same rank
       AffineMap idMap = AffineMap::getMultiDimIdentityMap(mt.getRank(), ctx);

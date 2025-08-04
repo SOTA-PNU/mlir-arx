@@ -47,6 +47,24 @@ struct RewriteOnnxDequantToArxPattern
   mlir::LogicalResult matchAndRewrite(ONNXDequantizeLinearOp op, mlir::PatternRewriter &rewriter) const override;
 };
 
+struct RewriteOnnxReshapeToArxPattern
+    : public mlir::OpRewritePattern<ONNXReshapeOp> {
+  using OpRewritePattern::OpRewritePattern;
+  mlir::LogicalResult matchAndRewrite(ONNXReshapeOp op, mlir::PatternRewriter &rewriter) const override;
+};
+
+struct RewriteOnnxMaxPoolToArxPattern
+    : public mlir::OpRewritePattern<ONNXMaxPoolSingleOutOp> {
+  using OpRewritePattern::OpRewritePattern;
+  mlir::LogicalResult matchAndRewrite(ONNXMaxPoolSingleOutOp op, mlir::PatternRewriter &rewriter) const override;
+};
+
+struct RewriteOnnxQConv2DToArxPattern
+    : public mlir::OpRewritePattern<ONNXQLinearConvOp> {
+  using OpRewritePattern::OpRewritePattern;
+  mlir::LogicalResult matchAndRewrite(ONNXQLinearConvOp op, mlir::PatternRewriter &rewriter) const override;
+};
+
 
 } // namespace harx
 } // namespace onnx_mlir

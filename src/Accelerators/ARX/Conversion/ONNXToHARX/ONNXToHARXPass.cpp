@@ -84,7 +84,7 @@ void ONNXToHARXLoweringPass::runOnOperation() {
         return false;
     return true;  // no onnx.name attrs → legal
   });
-  target.addIllegalOp<ONNXQuantizeLinearOp, ONNXDequantizeLinearOp>();
+  target.addIllegalOp<ONNXQuantizeLinearOp, ONNXDequantizeLinearOp, ONNXReshapeOp, ONNXMaxPoolSingleOutOp, ONNXQLinearConvOp>();
 
   target.addDynamicallyLegalOp<ONNXCustomOp>([](ONNXCustomOp op) { 
     if (op.getFunctionName() != "QLinearAdd") {
@@ -107,24 +107,6 @@ void ONNXToHARXLoweringPass::runOnOperation() {
     }
   });
 
-  // target.addDynamicallyLegalOp<ONNXQLinearMatMulOp>([](ONNXQLinearMatMulOp op) { 
-  //   auto size = std::distance(op.getResult().getUses().begin(), op.getResult().getUses().end());
-
-  //   if (size == 1) { 
-  //     auto op2 = op.getResult().getUses().begin()->getOwner();
-  //     llvm::dbgs() << "QLinearMatMulOp Next is : " << op2 << "\n";
-  //     if (auto customOp = mlir::dyn_cast<ONNXCustomOp>(op2); customOp.getFunctionName() == "QLinearAdd") {
-  //       llvm::dbgs() << "QLinearMatMulOp Next is QLinearAdd, so return false.\n";
-  //       return false;
-  //     }else { 
-  //       llvm::dbgs() << "QLinearMatMulOp Next is not QLinearAdd, so return true.\n";
-  //       return true;
-  //     }
-  //   }else { 
-  //     return true;
-  //   }
-  // });
-  
   MyTypeConverter krnlTypeConverter;
   
   RewritePatternSet patterns(&getContext());

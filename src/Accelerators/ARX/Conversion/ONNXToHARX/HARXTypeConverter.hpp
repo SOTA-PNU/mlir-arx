@@ -11,10 +11,6 @@ namespace harx {
 
 struct MyTypeConverter : public mlir::TypeConverter {
   MyTypeConverter() {
-    // (A) f32 → 원하는 타입(예: f16) 로 바꿔 주는 1-to-1 규칙
-    addConversion([](mlir::Float32Type t) {
-      return mlir::Float16Type::get(t.getContext());          // ← 바꿀 타입
-    });
 
     // (B) 다른 타입은 그대로 둠
     addConversion([](mlir::Type t) { return t; });
@@ -28,7 +24,6 @@ struct MyTypeConverter : public mlir::TypeConverter {
       return st.clone(newElem);
     });
 
-    // ───────────────────────────────────────────────
     // (선택) 필요하면 캐스트 materialization 도 추가
     addSourceMaterialization([](mlir::OpBuilder &b, mlir::Type dstTy,
                                 mlir::ValueRange inputs, mlir::Location loc)
