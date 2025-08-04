@@ -71,7 +71,7 @@ def HARXConstantOp : HARX_Op<"Constant", [Pure,
   }];
 
   let arguments = (ins ElementsAttr:$value);
-  let results   = (outs TensorOf<[UI8]>:$result);
+  let results   = (outs TensorOf<[UI8, I32, SI32]>:$result);
 
   // let builders = [OpBuilder<(ins TensorOf<[UI8]>:$value)>];
 
@@ -88,7 +88,6 @@ def HARXConstantOp : HARX_Op<"Constant", [Pure,
   }];
 }
 
-
 def HARXAddOp : HARX_Op<"Add", [Pure, SameOperandsAndResultLayout,
     DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
     DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
@@ -101,15 +100,14 @@ def HARXAddOp : HARX_Op<"Add", [Pure, SameOperandsAndResultLayout,
   // Operands and result are restricted to MLIR tensor types only.
   let arguments = (ins TensorOf<[UI8]>:$X,
                        TensorOf<[UI8]>:$Y,
-                       OptionalAttr<StrAttr>:$node_name,
-                       OptionalAttr<F32Attr>:$x_scale,
-                       OptionalAttr<F32Attr>:$x_offset,
-                       OptionalAttr<F32Attr>:$y_scale,
-                       OptionalAttr<F32Attr>:$y_offset,
-                       OptionalAttr<F32Attr>:$out_scale,
-                       OptionalAttr<F32Attr>:$out_offset);
+                       F32Attr:$x_scale,
+                       I32Attr:$x_offset,
+                       F32Attr:$y_scale,
+                       I32Attr:$y_offset,
+                       F32Attr:$out_scale,
+                       I32Attr:$out_offset);
 
-  let results   = (outs TensorOf<[UI8]>:$Out);
+  let results   = (outs TensorOf<[UI8]>:$output);
 
   let extraClassDefinition = [{
     onnx_mlir::ONNXOpShapeHelper *HARXAddOp::getShapeHelper(mlir::Operation *op,
@@ -124,85 +122,204 @@ def HARXAddOp : HARX_Op<"Add", [Pure, SameOperandsAndResultLayout,
   }];
 }
 
-// def HARXStickOp:HARX_Op<"Stick", [Pure,
+
+def HARXReluOp : HARX_Op<"Relu", [Pure, SameOperandsAndResultLayout,
+    DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
+    DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
+  let summary = "HARX Relu operation";
+  let description = [{
+    HARX operation to perform a Relu.
+    This operation does not support broadcasting.
+  }];
+
+  // Operands and result are restricted to MLIR tensor types only.
+  let arguments = (ins TensorOf<[UI8]>:$X,
+                       TensorOf<[UI8]>:$Y,
+                       I32Attr:$offset);
+
+  let results   = (outs TensorOf<[UI8]>:$Out);
+
+  let extraClassDefinition = [{
+    onnx_mlir::ONNXOpShapeHelper *HARXReluOp::getShapeHelper(mlir::Operation *op,
+        mlir::ArrayRef<mlir::Value> oper,
+        onnx_mlir::IndexExprBuilder *ieb,
+        onnx_mlir::IndexExprScope *scope) {
+      onnx_mlir::ONNXOpShapeHelper *sh =
+          new HARXBinaryOpShapeHelper(op, oper, ieb, scope);
+      assert(sh && "failed to allocate shape helper");
+      return sh;
+    }
+  }];
+}
+
+
+def HARXQuantizationOp : HARX_Op<"Quantization", [Pure, SameOperandsAndResultLayout,
+    DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
+    DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
+  let summary = "HARX Quantization operation";
+  let description = [{
+    HARX operation to perform quantization.
+    This operation does not support broadcasting.
+  }];
+
+  // Operands and result are restricted to MLIR tensor types only.
+  let arguments = (ins TensorOf<[F32]>:$input,
+                       F32Attr:$scale,
+                       UI8Attr:$offset);
+
+  let results   = (outs TensorOf<[UI8]>:$output);
+
+  let extraClassDefinition = [{
+    onnx_mlir::ONNXOpShapeHelper *HARXQuantizationOp::getShapeHelper(mlir::Operation *op,
+        mlir::ArrayRef<mlir::Value> oper,
+        onnx_mlir::IndexExprBuilder *ieb,
+        onnx_mlir::IndexExprScope *scope) {
+      onnx_mlir::ONNXOpShapeHelper *sh =
+          new HARXBinaryOpShapeHelper(op, oper, ieb, scope);
+      assert(sh && "failed to allocate shape helper");
+      return sh;
+    }
+  }];
+}
+
+def HARXDequantizationOp : HARX_Op<"Dequantization", [Pure, SameOperandsAndResultLayout,
+    DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
+    DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
+  let summary = "HARX Dequantization operation";
+  let description = [{
+    HARX operation to perform dequantization.
+    This operation does not support broadcasting.
+  }];
+
+  // Operands and result are restricted to MLIR tensor types only.
+  let arguments = (ins TensorOf<[UI8]>:$input,
+                       F32Attr:$scale,
+                       UI8Attr:$offset,
+                       I32Attr:$channel_size,
+                       UI8Attr:$use_stride);
+
+  let results   = (outs TensorOf<[F32]>:$output);
+
+  let extraClassDefinition = [{
+    onnx_mlir::ONNXOpShapeHelper *HARXDequantizationOp::getShapeHelper(mlir::Operation *op,
+        mlir::ArrayRef<mlir::Value> oper,
+        onnx_mlir::IndexExprBuilder *ieb,
+        onnx_mlir::IndexExprScope *scope) {
+      onnx_mlir::ONNXOpShapeHelper *sh =
+          new HARXBinaryOpShapeHelper(op, oper, ieb, scope);
+      assert(sh && "failed to allocate shape helper");
+      return sh;
+    }
+  }];
+}
+
+def HARXConvolutionShiftOp : HARX_Op<"ConvolutionShift", [Pure, SameOperandsAndResultLayout,
+    DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
+    DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
+  let summary = "HARX ConvolutionShift operation";
+  let description = [{
+    HARX operation to perform convolution with shift.
+    This operation does not support broadcasting.
+  }];
+
+  // Operands and result are restricted to MLIR tensor types only.
+  let arguments = (ins TensorOf<[UI8]>:$input,
+                       TensorOf<[UI8]>:$kernel,
+                       TensorOf<[UI8]>:$output_shift,
+                       OptionalAttr<ElementsAttr>:$bias,
+                       UI8Attr:$output_offset,
+                       UI8Attr:$do_bias,
+                       UI8Attr:$do_relu,
+                       UI8Attr:$pad_size,
+                       UI8Attr:$stride_size);
+
+  let results   = (outs TensorOf<[UI8]>:$output);
+
+  let extraClassDefinition = [{
+    onnx_mlir::ONNXOpShapeHelper *HARXConvolutionShiftOp::getShapeHelper(mlir::Operation *op,
+        mlir::ArrayRef<mlir::Value> oper,
+        onnx_mlir::IndexExprBuilder *ieb,
+        onnx_mlir::IndexExprScope *scope) {
+      onnx_mlir::ONNXOpShapeHelper *sh =
+          new HARXConv2DOpShapeHelper(op, oper, ieb, scope);
+      assert(sh && "failed to allocate shape helper");
+      return sh;
+    }
+  }];
+}
+
+def HARXMatMulOp : HARX_Op<"MatMul", [Pure,
+    DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
+    DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
+  let summary = "HARX MatMul operation";
+  let description = [{
+    HARX operation to perform an MatMul.
+    This operation does not support broadcasting.
+  }];
+
+  // Operands and result are restricted to MLIR tensor types only.
+  let arguments = (ins TensorOf<[UI8]>:$input,
+                       TensorOf<[UI8]>:$weight,
+                       TensorOf<[I32, SI32]>:$bias,
+                       I32Attr:$output_offset,
+                       UI8Attr:$do_bias,
+                       TensorOf<[I32, SI32]>:$shift);
+
+  let results   = (outs TensorOf<[UI8]>:$output);
+  let extraClassDefinition = [{
+    onnx_mlir::ONNXOpShapeHelper *HARXMatMulOp::getShapeHelper(mlir::Operation *op,
+        mlir::ArrayRef<mlir::Value> oper,
+        onnx_mlir::IndexExprBuilder *ieb,
+        onnx_mlir::IndexExprScope *scope) {
+      onnx_mlir::ONNXOpShapeHelper *sh =
+          new HARXMatMulOpShapeHelper(op, oper, ieb, scope);
+      assert(sh && "failed to allocate shape helper");
+      return sh;
+    }
+  }];
+
+}
+
+
+// def HARXConv2DOp:HARX_Op<"Conv2D", [Pure,
 //     DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
 //     DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
-//   let summary = "HARX Stick operation";
+//   let summary = "HARX 2D convolution operation";
 //   let description = [{
-//     HARX operation to perform a Stick."
-
-//     If `layout`=`NHWC`, input must be in `NCHW` and output will be in `NHWC`.
-
-//     Optional `saturation` indicates whether the CPU tensor is saturated before stickification
-//     or not. If it is saturated, the dlfloat16 range would be used.
-//     Saturation if off if `saturation == 0` or it is not given. Otherwise, it is on.
+//     HARX operation to perform 2D convolution.
+//     * input: `[num_batches, height_in, width_in, channels_in]`
+//     * input_kernel: `[kernel_height, kernel_width, channels_in, channels_out]`
+//     * input_bias: `[channels_out] `
+//     * kernel_shape: 1D array of kernel height and width
+//     * strides: 1D array of stride height and width
+//     * padding_type: SAME_PADDING or VALID_PADDING
+//     * act_func: ACT_NONE or ACT_RELU
+//     * output: `[num_batches, height_out, width_out, channels_out]`
 //   }];
-//   let arguments = (ins AnyTypeOf<[TensorOf<[F32]>, NoneType]>:$In,
-//                        OptionalAttr<StrAttr>:$layout,
-//                        OptionalAttr<SI64Attr>:$saturation);
-//   let results = (outs AnyTypeOf<[ZTensor_1D, ZTensor_2D, ZTensor_3D, ZTensor_4D,
-//                                  ZTensor_2DS, ZTensor_3DS, ZTensor_4DS,
-//                                  ZTensor_NHWC,  ZTensor_NCHW, ZTensor_HWCK,
-//                                  NoneType]>:$Out);
+//   let arguments = (ins ZTensor_NHWC:$input,
+//                        ZTensor_HWCK:$input_kernel,
+//                        AnyTypeOf<[ZTensor_1D, NoneType]>:$input_bias,
+//                        I64ArrayAttr:$kernel_shape,
+//                        I64ArrayAttr:$strides,
+//                        DefaultValuedStrAttr<StrAttr, "SAME_PADDING">:$padding_type,
+//                        DefaultValuedStrAttr<StrAttr, "ACT_NONE">:$act_func
+//   );
+//   let results = (outs ZTensor_NHWC:$output);
 //   let builders = [
-//     OpBuilder<(ins "::mlir::Value":$In, "::mlir::StringAttr":$layout), [{
-//       build($_builder, $_state, In, layout, IntegerAttr());
-//     }]>,
-//     OpBuilder<(ins "::mlir::Value":$In, "::mlir::StringAttr":$layout,
-//                "::mlir::IntegerAttr":$saturation)>
+//     OpBuilder<(ins "::mlir::Value":$input, "::mlir::Value":$input_kernel, "::mlir::Value":$input_bias,
+//                    "::mlir::ArrayAttr":$kernel_shape, "::mlir::ArrayAttr":$strides,
+//                    "::mlir::StringAttr":$padding_type, "::mlir::StringAttr":$act_func), [{
+//       Type elementType = mlir::cast<ShapedType>(input.getType()).getElementType();
+//       UnrankedTensorType resType = UnrankedTensorType::get(elementType);
+//       build($_builder, $_state, resType, input, input_kernel, input_bias,
+//             kernel_shape, strides, padding_type, act_func);
+//     }]>
 //   ];
-//   let hasCanonicalizer = 1;
+//   let hasVerifier = 1;
 //   let extraClassDefinition = [{
-//     onnx_mlir::ONNXOpShapeHelper * HARXStickOp::getShapeHelper(mlir::Operation *op, mlir::ArrayRef<mlir::Value> oper,
+//     onnx_mlir::ONNXOpShapeHelper * HARXConv2DOp::getShapeHelper(mlir::Operation *op, mlir::ArrayRef<mlir::Value> oper,
 //         onnx_mlir::IndexExprBuilder *ieb, onnx_mlir::IndexExprScope *scope) {
-//       onnx_mlir::ONNXOpShapeHelper *sh = new HARXStickOpShapeHelper(op, oper, ieb, scope);
-//       assert(sh && "failed to allocate shape helper");
-//       return sh;
-//     }
-//   }];
-// }
-
-// def HARXUnstickOp:HARX_Op<"Unstick", [Pure,
-//     DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
-//     DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
-//   let summary = "HARX Unstick operation";
-//   let description = [{
-//     HARX operation to perform a Unstick.
-//   }];
-//   let arguments = (ins AnyTypeOf<[ZTensor_1D, ZTensor_2D, ZTensor_3D, ZTensor_4D,
-//                                  ZTensor_2DS, ZTensor_3DS, ZTensor_4DS,
-//                                  ZTensor_NHWC, ZTensor_NCHW, ZTensor_HWCK]>:$In);
-//   let results = (outs TensorOf<[F32]>:$Out);
-//   let builders = [
-//     OpBuilder<(ins "::mlir::Value":$In)>,
-//   ];
-//   let hasCanonicalizer = 1;
-//   let extraClassDefinition = [{
-//     onnx_mlir::ONNXOpShapeHelper * HARXUnstickOp::getShapeHelper(mlir::Operation *op, mlir::ArrayRef<mlir::Value> oper,
-//         onnx_mlir::IndexExprBuilder *ieb, onnx_mlir::IndexExprScope *scope) {
-//       onnx_mlir::ONNXOpShapeHelper *sh = new HARXUnstickOpShapeHelper(op, oper, ieb, scope);
-//       assert(sh && "failed to allocate shape helper");
-//       return sh;
-//     }
-//   }];
-// }
-
-
-// def HARXAddOp:HARX_Op<"Add", [Pure, SameOperandsAndResultLayout,
-//     DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
-//     DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
-//   let summary = "HARX Add operation";
-//   let description = [{
-//     HARX operation to perform an Add.
-//     This operation does not support broadcasting.
-//   }];
-//   let arguments = (ins AnyTypeOf<[AnyZTensor]>:$X,
-//                        AnyTypeOf<[AnyZTensor]>:$Y);
-//   let results = (outs AnyTypeOf<[AnyZTensor]>:$Out);
-//   let extraClassDefinition = [{
-//     onnx_mlir::ONNXOpShapeHelper * HARXAddOp::getShapeHelper(mlir::Operation *op, mlir::ArrayRef<mlir::Value> oper,
-//         onnx_mlir::IndexExprBuilder *ieb, onnx_mlir::IndexExprScope *scope) {
-//       onnx_mlir::ONNXOpShapeHelper *sh = new HARXBinaryOpShapeHelper(op, oper, ieb, scope);
+//       onnx_mlir::ONNXOpShapeHelper *sh = new HARXConv2DOpShapeHelper(op, oper, ieb, scope);
 //       assert(sh && "failed to allocate shape helper");
 //       return sh;
 //     }
@@ -211,123 +328,35 @@ def HARXAddOp : HARX_Op<"Add", [Pure, SameOperandsAndResultLayout,
 
 
 
-
-// def HARXSubOp:HARX_Op<"Sub", [Pure, SameOperandsAndResultLayout,
+// def HARXConv2DOp:HARX_Op<"Conv2D", [Pure,
 //     DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
 //     DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
-//   let summary = "HARX Sub operation";
+//   let summary = "HARX 2D convolution operation";
 //   let description = [{
-//     HARX operation to perform a Sub.
-//     This operation does not support broadcasting.
+//     HARX operation to perform 2D convolution.
+//     * input: `[num_batches, height_in, width_in, channels_in]`
+//     * input_kernel: `[kernel_height, kernel_width, channels_in, channels_out]`
+//     * input_bias: `[channels_out] `
+//     * kernel_shape: 1D array of kernel height and width
+//     * strides: 1D array of stride height and width
+//     * padding_type: SAME_PADDING or VALID_PADDING
+//     * act_func: ACT_NONE or ACT_RELU
+//     * output: `[num_batches, height_out, width_out, channels_out]`
 //   }];
-//   let arguments = (ins AnyTypeOf<[AnyZTensor]>:$X,
-//                        AnyTypeOf<[AnyZTensor]>:$Y);
-//   let results = (outs AnyTypeOf<[AnyZTensor]>:$Out);
+//   let arguments = (ins ZTensor_NHWC:$input,
+//                        ZTensor_HWCK:$input_kernel,
+//                        AnyTypeOf<[ZTensor_1D, NoneType]>:$input_bias,
+//                        I64ArrayAttr:$kernel_shape,
+//                        I64ArrayAttr:$strides,
+//                        DefaultValuedStrAttr<StrAttr, "SAME_PADDING">:$padding_type,
+//                        DefaultValuedStrAttr<StrAttr, "ACT_NONE">:$act_func
+//   );
+//   let results = (outs TensorOf<UI8>:$output);
+//   let hasVerifier = 1;
 //   let extraClassDefinition = [{
-//     onnx_mlir::ONNXOpShapeHelper * HARXSubOp::getShapeHelper(mlir::Operation *op, mlir::ArrayRef<mlir::Value> oper,
+//     onnx_mlir::ONNXOpShapeHelper * HARXConv2DOp::getShapeHelper(mlir::Operation *op, mlir::ArrayRef<mlir::Value> oper,
 //         onnx_mlir::IndexExprBuilder *ieb, onnx_mlir::IndexExprScope *scope) {
-//       onnx_mlir::ONNXOpShapeHelper *sh = new HARXBinaryOpShapeHelper(op, oper, ieb, scope);
-//       assert(sh && "failed to allocate shape helper");
-//       return sh;
-//     }
-//   }];
-// }
-
-// def HARXMulOp:HARX_Op<"Mul", [Pure, SameOperandsAndResultLayout,
-//     DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
-//     DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
-//   let summary = "HARX Mul operation";
-//   let description = [{
-//     HARX operation to perform a Mul.
-//     This operation does not support broadcasting.
-//   }];
-//   let arguments = (ins AnyTypeOf<[AnyZTensor]>:$X,
-//                        AnyTypeOf<[AnyZTensor]>:$Y);
-//   let results = (outs AnyTypeOf<[AnyZTensor]>:$Out);
-//   let extraClassDefinition = [{
-//     onnx_mlir::ONNXOpShapeHelper * HARXMulOp::getShapeHelper(mlir::Operation *op, mlir::ArrayRef<mlir::Value> oper,
-//         onnx_mlir::IndexExprBuilder *ieb, onnx_mlir::IndexExprScope *scope) {
-//       onnx_mlir::ONNXOpShapeHelper *sh = new HARXBinaryOpShapeHelper(op, oper, ieb, scope);
-//       assert(sh && "failed to allocate shape helper");
-//       return sh;
-//     }
-//   }];
-// }
-
-// def HARXDivOp:HARX_Op<"Div", [Pure, SameOperandsAndResultLayout,
-//     DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
-//     DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
-//   let summary = "HARX Div operation";
-//   let description = [{
-//     HARX operation to perform a Div.
-//     This operation does not support broadcasting.
-//   }];
-//   let arguments = (ins AnyTypeOf<[AnyZTensor]>:$X,
-//                        AnyTypeOf<[AnyZTensor]>:$Y);
-//   let results = (outs AnyTypeOf<[AnyZTensor]>:$Out);
-//   let extraClassDefinition = [{
-//     onnx_mlir::ONNXOpShapeHelper * HARXDivOp::getShapeHelper(mlir::Operation *op, mlir::ArrayRef<mlir::Value> oper,
-//         onnx_mlir::IndexExprBuilder *ieb, onnx_mlir::IndexExprScope *scope) {
-//       onnx_mlir::ONNXOpShapeHelper *sh = new HARXBinaryOpShapeHelper(op, oper, ieb, scope);
-//       assert(sh && "failed to allocate shape helper");
-//       return sh;
-//     }
-//   }];
-// }
-
-// def HARXReluOp:HARX_Op<"Relu", [Pure, SameOperandsAndResultLayout,
-//     DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
-//     DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
-//   let summary = "HARX Relu operation";
-//   let description = [{
-//     "HARX operation to perform a Relu."
-//   }];
-//   let arguments = (ins AnyTypeOf<[AnyZTensor]>:$X);
-//   let results = (outs AnyTypeOf<[AnyZTensor]>:$Out);
-//   let extraClassDefinition = [{
-//     onnx_mlir::ONNXOpShapeHelper * HARXReluOp::getShapeHelper(mlir::Operation *op, mlir::ArrayRef<mlir::Value> oper,
-//         onnx_mlir::IndexExprBuilder *ieb, onnx_mlir::IndexExprScope *scope) {
-//       onnx_mlir::ONNXOpShapeHelper *sh = new HARXUnaryOpShapeHelper(op, oper, ieb, scope);
-//       assert(sh && "failed to allocate shape helper");
-//       return sh;
-//     }
-//   }];
-// }
-
-// def HARXTanhOp:HARX_Op<"Tanh", [Pure, SameOperandsAndResultLayout,
-//     DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
-//     DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
-//   let summary = "HARX Tanh operation";
-//   let description = [{
-//     HARX operation to perform a Tanh.
-//   }];
-//   let arguments = (ins AnyTypeOf<[AnyZTensor]>:$X);
-//   let results = (outs AnyTypeOf<[AnyZTensor]>:$Out);
-//   let extraClassDefinition = [{
-//     onnx_mlir::ONNXOpShapeHelper * HARXTanhOp::getShapeHelper(mlir::Operation *op, mlir::ArrayRef<mlir::Value> oper,
-//         onnx_mlir::IndexExprBuilder *ieb, onnx_mlir::IndexExprScope *scope) {
-//       onnx_mlir::ONNXOpShapeHelper *sh = new HARXUnaryOpShapeHelper(op, oper, ieb, scope);
-//       assert(sh && "failed to allocate shape helper");
-//       return sh;
-//     }
-//   }];
-// }
-
-// def HARXSoftmaxOp:HARX_Op<"Softmax", [Pure, SameOperandsAndResultLayout,
-//     DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
-//     DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
-//   let summary = "HARX Softmax operation";
-//   let description = [{
-//     HARX operation to perform a Softmax.
-//     act_func: ACT_NONE or ACT_LOG.
-//   }];
-//   let arguments = (ins ZTensor_3DS:$X,
-//                        DefaultValuedStrAttr<StrAttr, "ACT_NONE">:$act_func);
-//   let results = (outs ZTensor_3DS:$Out);
-//   let extraClassDefinition = [{
-//     onnx_mlir::ONNXOpShapeHelper * HARXSoftmaxOp::getShapeHelper(mlir::Operation *op, mlir::ArrayRef<mlir::Value> oper,
-//         onnx_mlir::IndexExprBuilder *ieb, onnx_mlir::IndexExprScope *scope) {
-//       onnx_mlir::ONNXOpShapeHelper *sh = new HARXUnaryOpShapeHelper(op, oper, ieb, scope);
+//       onnx_mlir::ONNXOpShapeHelper *sh = new HARXConv2DOpShapeHelper(op, oper, ieb, scope);
 //       assert(sh && "failed to allocate shape helper");
 //       return sh;
 //     }
@@ -426,49 +455,5 @@ def HARXAddOp : HARX_Op<"Add", [Pure, SameOperandsAndResultLayout,
 //   }];
 // }
 
-// def HARXConv2DOp:HARX_Op<"Conv2D", [Pure,
-//     DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
-//     DeclareOpInterfaceMethods<ShapeHelperOpInterface>]> {
-//   let summary = "HARX 2D convolution operation";
-//   let description = [{
-//     HARX operation to perform 2D convolution.
-//     * input: `[num_batches, height_in, width_in, channels_in]`
-//     * input_kernel: `[kernel_height, kernel_width, channels_in, channels_out]`
-//     * input_bias: `[channels_out] `
-//     * kernel_shape: 1D array of kernel height and width
-//     * strides: 1D array of stride height and width
-//     * padding_type: SAME_PADDING or VALID_PADDING
-//     * act_func: ACT_NONE or ACT_RELU
-//     * output: `[num_batches, height_out, width_out, channels_out]`
-//   }];
-//   let arguments = (ins ZTensor_NHWC:$input,
-//                        ZTensor_HWCK:$input_kernel,
-//                        AnyTypeOf<[ZTensor_1D, NoneType]>:$input_bias,
-//                        I64ArrayAttr:$kernel_shape,
-//                        I64ArrayAttr:$strides,
-//                        DefaultValuedStrAttr<StrAttr, "SAME_PADDING">:$padding_type,
-//                        DefaultValuedStrAttr<StrAttr, "ACT_NONE">:$act_func
-//   );
-//   let results = (outs ZTensor_NHWC:$output);
-//   let builders = [
-//     OpBuilder<(ins "::mlir::Value":$input, "::mlir::Value":$input_kernel, "::mlir::Value":$input_bias,
-//                    "::mlir::ArrayAttr":$kernel_shape, "::mlir::ArrayAttr":$strides,
-//                    "::mlir::StringAttr":$padding_type, "::mlir::StringAttr":$act_func), [{
-//       Type elementType = mlir::cast<ShapedType>(input.getType()).getElementType();
-//       UnrankedTensorType resType = UnrankedTensorType::get(elementType);
-//       build($_builder, $_state, resType, input, input_kernel, input_bias,
-//             kernel_shape, strides, padding_type, act_func);
-//     }]>
-//   ];
-//   let hasVerifier = 1;
-//   let extraClassDefinition = [{
-//     onnx_mlir::ONNXOpShapeHelper * HARXConv2DOp::getShapeHelper(mlir::Operation *op, mlir::ArrayRef<mlir::Value> oper,
-//         onnx_mlir::IndexExprBuilder *ieb, onnx_mlir::IndexExprScope *scope) {
-//       onnx_mlir::ONNXOpShapeHelper *sh = new HARXConv2DOpShapeHelper(op, oper, ieb, scope);
-//       assert(sh && "failed to allocate shape helper");
-//       return sh;
-//     }
-//   }];
-// }
 
 #endif // HARX_OPS

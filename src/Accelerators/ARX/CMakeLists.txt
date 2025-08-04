@@ -52,4 +52,7 @@ add_onnx_mlir_library(OMARXAccel
   OMHARXOps
   OMONNXToHARX
   OMHARXToLLVM
+  MLIREmitCDialect
   )
+
+  

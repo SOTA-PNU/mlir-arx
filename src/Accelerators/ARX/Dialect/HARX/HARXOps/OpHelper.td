@@ -85,27 +85,6 @@ def IsPlusConstantFloat : Constraint<
   "Is the float attribute is greater than 0"
 >;
 
-def TensorHas2DLayout: Constraint<
-  CPred<"::onnx_mlir::is2DLayout("
-        "::onnx_mlir::harx::convertZTensorDataLayoutToStringAttr($_builder, "
-        "::onnx_mlir::harx::getZTensorLayout($0.getType())))">,
-  "ZTensor has 2D layout"
->;
-
-def TensorHas3DSLayout: Constraint<
-  CPred<"::onnx_mlir::is3DSLayout("
-        "::onnx_mlir::harx::convertZTensorDataLayoutToStringAttr($_builder, "
-        "::onnx_mlir::harx::getZTensorLayout($0.getType())))">,
-  "ZTensor has 3DS layout"
->;
-
-def TensorHasNHWCLayout: Constraint<
-  CPred<"::onnx_mlir::isNHWCLayout("
-        "::onnx_mlir::harx::convertZTensorDataLayoutToStringAttr($_builder, "
-        "::onnx_mlir::harx::getZTensorLayout($0.getType())))">,
-  "ZTensor has NHWC layout"
->;
-
 def TensorHasNoNHWCLayout: Constraint<
   CPred<"!::onnx_mlir::isNHWCLayout("
         "::onnx_mlir::harx::convertZTensorDataLayoutToStringAttr($_builder, "

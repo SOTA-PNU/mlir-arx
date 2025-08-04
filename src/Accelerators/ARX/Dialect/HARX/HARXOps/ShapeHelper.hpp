@@ -31,30 +31,10 @@
 namespace onnx_mlir {
 namespace harx {
 
-//===----------------------------------------------------------------------===//
-// Shape helper for Stick/Unstick/MeanReduce2D ops.
-//===----------------------------------------------------------------------===//
-
-#define DECLARE_SHAPE_HELPER_HARX(SHAPE_HELPER)                               \
-  class SHAPE_HELPER : public ONNXOpShapeHelper {                              \
-  public:                                                                      \
-    SHAPE_HELPER(mlir::Operation *op,                                          \
-        mlir::ArrayRef<mlir::Value> operands = {},                             \
-        IndexExprBuilder *ieBuilder = nullptr,                                 \
-        IndexExprScope *scope = nullptr)                                       \
-        : ONNXOpShapeHelper(op, operands, ieBuilder, scope) {}                 \
-    virtual ~SHAPE_HELPER() {}                                                 \
-    mlir::LogicalResult computeShape() final;                                  \
-  };
-// DECLARE_SHAPE_HELPER_HARX(HARXStickifiedConstantOfShapeOpShapeHelper)
-DECLARE_SHAPE_HELPER_HARX(HARXStickOpShapeHelper)
-DECLARE_SHAPE_HELPER_HARX(HARXUnstickOpShapeHelper)
-#undef DECLARE_SHAPE_HELPER_HARX
 
 //===----------------------------------------------------------------------===//
 // Shape helper for MatMulOp.
 //===----------------------------------------------------------------------===//
-
 struct HARXMatMulOpShapeHelper : public ONNXOpShapeHelper {
   HARXMatMulOpShapeHelper(mlir::Operation *op,
       mlir::ArrayRef<mlir::Value> operands = {},
@@ -86,40 +66,40 @@ struct HARXConv2DOpShapeHelper : public ONNXOpShapeHelper {
   DimsExpr allOriginalDims;
 };
 
-//===----------------------------------------------------------------------===//
-// Shape helper for PoolingOp.
-//===----------------------------------------------------------------------===//
+// //===----------------------------------------------------------------------===//
+// // Shape helper for PoolingOp.
+// //===----------------------------------------------------------------------===//
 
-template <typename OP>
-struct HARXPoolingOpShapeHelper : public ONNXOpShapeHelper {
-  HARXPoolingOpShapeHelper(mlir::Operation *op,
-      mlir::ArrayRef<mlir::Value> operands = {},
-      IndexExprBuilder *ieBuilder = nullptr, IndexExprScope *scope = nullptr)
-      : ONNXOpShapeHelper(op, operands, ieBuilder, scope) {}
-  virtual ~HARXPoolingOpShapeHelper() {}
-  mlir::LogicalResult computeShape() final;
-  // Keep original dimensions in this order: batchsize, channel_in, height_in,
-  // weight_in, height_out, weight_out.
-  DimsExpr allOriginalDims;
-};
+// template <typename OP>
+// struct HARXPoolingOpShapeHelper : public ONNXOpShapeHelper {
+//   HARXPoolingOpShapeHelper(mlir::Operation *op,
+//       mlir::ArrayRef<mlir::Value> operands = {},
+//       IndexExprBuilder *ieBuilder = nullptr, IndexExprScope *scope = nullptr)
+//       : ONNXOpShapeHelper(op, operands, ieBuilder, scope) {}
+//   virtual ~HARXPoolingOpShapeHelper() {}
+//   mlir::LogicalResult computeShape() final;
+//   // Keep original dimensions in this order: batchsize, channel_in, height_in,
+//   // weight_in, height_out, weight_out.
+//   DimsExpr allOriginalDims;
+// };
 
-//===----------------------------------------------------------------------===//
-// Shape helper for UnaryOp.
-//===----------------------------------------------------------------------===//
+// //===----------------------------------------------------------------------===//
+// // Shape helper for UnaryOp.
+// //===----------------------------------------------------------------------===//
 
-struct HARXUnaryOpShapeHelper : public ONNXUnaryOpShapeHelper {
-public:
-  HARXUnaryOpShapeHelper(mlir::Operation *op,
-      mlir::ArrayRef<mlir::Value> operands = {},
-      IndexExprBuilder *ieBuilder = nullptr, IndexExprScope *scope = nullptr)
-      : ONNXUnaryOpShapeHelper(op, operands, ieBuilder, scope) {}
-};
+// struct HARXUnaryOpShapeHelper : public ONNXUnaryOpShapeHelper {
+// public:
+//   HARXUnaryOpShapeHelper(mlir::Operation *op,
+//       mlir::ArrayRef<mlir::Value> operands = {},
+//       IndexExprBuilder *ieBuilder = nullptr, IndexExprScope *scope = nullptr)
+//       : ONNXUnaryOpShapeHelper(op, operands, ieBuilder, scope) {}
+// };
 
-//===----------------------------------------------------------------------===//
-// Shape helper for BinaryOp.
-// HARX BinaryOps do not support broadcasting at this moment. Borrow UnaryOp
-// shapeHelper.
-//===----------------------------------------------------------------------===//
+// //===----------------------------------------------------------------------===//
+// // Shape helper for BinaryOp.
+// // HARX BinaryOps do not support broadcasting at this moment. Borrow UnaryOp
+// // shapeHelper.
+// //===----------------------------------------------------------------------===//
 
 struct HARXBinaryOpShapeHelper : public ONNXUnaryOpShapeHelper {
 public:

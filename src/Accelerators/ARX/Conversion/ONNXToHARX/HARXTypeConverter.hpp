@@ -41,7 +41,5 @@ struct MyTypeConverter : public mlir::TypeConverter {
   }
 };
 
-
-
 }
 }

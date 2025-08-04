@@ -26,6 +26,8 @@
 #include "src/Dialect/ONNX/Transforms/ShapeInference.hpp"
 #include "src/Accelerators/ARX/Conversion/ONNXToHARX/HARXTypeConverter.hpp"
 
+#include <iterator>
+
 using namespace mlir;
 
 
@@ -71,7 +73,6 @@ void ONNXToHARXLoweringPass::runOnOperation() {
   dimAnalysis.analyze();
 
   target.addIllegalOp<ONNXEntryPointOp>();
-
   target.addDynamicallyLegalOp<func::FuncOp>([](func::FuncOp fn) {
     // Check all arguments for an "onnx.name" attribute:
     for (unsigned i = 0, e = fn.getFunctionType().getNumInputs(); i < e; ++i)
@@ -83,20 +84,53 @@ void ONNXToHARXLoweringPass::runOnOperation() {
         return false;
     return true;  // no onnx.name attrs → legal
   });
+  target.addIllegalOp<ONNXQuantizeLinearOp, ONNXDequantizeLinearOp>();
 
-  // llvm::outs() << "2rewritePatternONNXToKrnl CALLED!!!!\n";
+  target.addDynamicallyLegalOp<ONNXCustomOp>([](ONNXCustomOp op) { 
+    if (op.getFunctionName() != "QLinearAdd") {
+      llvm::dbgs() << "QLinearAdd is legal, return true.\n";
+      return true; // QLinearAdd is not legal.
+    }
+
+    auto op2 = op.getInputs()[0].getDefiningOp<ONNXQLinearMatMulOp>();
+    if (!op2) {
+      llvm::dbgs() << "QLinearMatMulOp not found, return true.\n";
+      return true; // If no QLinearMatMulOp, then legal.
+    }
+
+    auto size = std::distance(op2.getResult().getUses().begin(), op2.getResult().getUses().end());
+
+    if (size == 1) { 
+      return false;
+    }else { 
+      return true;
+    }
+  });
+
+  // target.addDynamicallyLegalOp<ONNXQLinearMatMulOp>([](ONNXQLinearMatMulOp op) { 
+  //   auto size = std::distance(op.getResult().getUses().begin(), op.getResult().getUses().end());
+
+  //   if (size == 1) { 
+  //     auto op2 = op.getResult().getUses().begin()->getOwner();
+  //     llvm::dbgs() << "QLinearMatMulOp Next is : " << op2 << "\n";
+  //     if (auto customOp = mlir::dyn_cast<ONNXCustomOp>(op2); customOp.getFunctionName() == "QLinearAdd") {
+  //       llvm::dbgs() << "QLinearMatMulOp Next is QLinearAdd, so return false.\n";
+  //       return false;
+  //     }else { 
+  //       llvm::dbgs() << "QLinearMatMulOp Next is not QLinearAdd, so return true.\n";
+  //       return true;
+  //     }
+  //   }else { 
+  //     return true;
+  //   }
+  // });
+  
   MyTypeConverter krnlTypeConverter;
   
   RewritePatternSet patterns(&getContext());
 
   onnx_mlir::harx::populateONNXToARXConversionPattern(krnlTypeConverter, patterns, &getContext(), false);
 
-
-
-  module.walk([&](Operation *op) {
-    llvm::outs() << "Processing operation: " << op->getName() << "\n";
-    llvm::outs() << "Found ONNX operation: " << op->getDialect() << "\n";
-  });
 
   if (failed(applyPartialConversion(module, target, std::move(patterns)))){
     signalPassFailure();

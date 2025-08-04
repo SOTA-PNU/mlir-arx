@@ -8,17 +8,22 @@ def generate_random_string(length):
     text = "1234567890_=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
     return ''.join(random.choice(text) for _ in range(length)) + '.mlir'
 
+# onnx-mlir-opt $1 -maccel=ARX --shape-inference --constprop-onnx --convert-onnx-to-harx --canonicalize  ./quant_add_dequant.mlir
+
 list_of_test_onnx_to_arx = [
     "onnx-mlir-opt -maccel=ARX --shape-inference --constprop-onnx --convert-onnx-to-harx --canonicalize",
 ]
 
 list_of_file_for_onnx_to_arx = [ 
+    ("./mlir/quant_add_dequant.mlir", "./harx/quant_add_dequant.mlir"),
     ("./mlir/uint_model_1x10x10.mlir", "./harx/uint_model_1x10x10.mlir"),
 ]
 
 pass_test = 0 
 error_test = 0
 run_test = 0
+fail_list = []
+success_list = []
 for test in list_of_test_onnx_to_arx:
     for (input_file, pred_file) in list_of_file_for_onnx_to_arx:
         pass_test += 1
@@ -47,9 +52,11 @@ for test in list_of_test_onnx_to_arx:
             for line in diff:
                 print(line, end='')
             error_test += 1
+            fail_list.append(os.path.basename(input_file))
         else:
             print("✅ Test passed for: " + input_file)
             run_test += 1
+            success_list.append(os.path.basename(input_file))
         
         # Clean up the temporary file
         os.remove(tmp_file_path)
@@ -58,11 +65,15 @@ print()
 print("Summary:")
 print(f"Total tests run: {pass_test}")
 print(f"✅ Total tests passed: {run_test}")
+for success in success_list:
+    print(f"\tPassed test: {success}")
 print(f"❌ Total tests failed: {error_test}")
+for fail in fail_list:
+    print(f"\tFailed test: {fail}")
 
 if error_test > 0:
-    raise Exception(f"Some tests failed. Total failed: {run_test}/{pass_test}")
+    os._exit(1)
 else:
-    print(f"All tests passed successfully! {run_test}/{pass_test}")
+    os._exit(0)  # Exit the script cleanly
     
 # %%

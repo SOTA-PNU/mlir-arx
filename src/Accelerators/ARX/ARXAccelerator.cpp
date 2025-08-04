@@ -33,6 +33,7 @@
 #include "src/Compiler/CompilerOptions.hpp"
 #include "mlir/Dialect/Arith/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/Bufferization/Transforms/FuncBufferizableOpInterfaceImpl.h"  // ← for Func
+#include "mlir/Dialect/EmitC/IR/EmitC.h"
 
 #include <memory>
 
@@ -86,7 +87,8 @@ void ARXAccelerator::registerDialects(mlir::DialectRegistry &registry) const {
   registry.insert<
     mlir::arith::ArithDialect,
     mlir::func::FuncDialect,
-    mlir::bufferization::BufferizationDialect
+    mlir::bufferization::BufferizationDialect,
+    mlir::emitc::EmitCDialect
   >();
 
   mlir::arith::registerBufferizableOpInterfaceExternalModels(registry);
@@ -99,6 +101,7 @@ void ARXAccelerator::registerDialects(mlir::DialectRegistry &registry) const {
 void ARXAccelerator::registerPasses(int optLevel) const {
   LLVM_DEBUG(llvm::dbgs() << "Registering passes for ARX accelerator\n");
   llvm::outs() << "Registering passes for ARX accelerator\n";
+  
   mlir::registerPass([]() -> std::unique_ptr<mlir::Pass> {
     return onnx_mlir::createONNXToHARXPass();
   });
