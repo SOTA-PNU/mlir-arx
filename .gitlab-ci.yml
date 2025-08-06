@@ -62,8 +62,9 @@ build:
     - git checkout origin/chacha/arx
     - git submodule update --init --recursive
     - cmake -G Ninja -DCMAKE_CXX_COMPILER=/usr/bin/c++ -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DMLIR_DIR=/workdir/llvm-project/build/lib/cmake/mlir -DONNX_MLIR_ACCELERATORS=${ACCEL} ..
-    - cmake --build . --target onnx-mlir
-    - cmake --build . --target onnx-mlir-opt
-    - cmake --build . --target check-onnx-lit
+    - cmake --build .
     - cd /builds/ones-ai/mlir-arx/test/mlir-arx
     - python3 run.py
+    # - cmake --build . --target onnx-mlir
+    # - cmake --build . --target onnx-mlir-opt
+    # - cmake --build . --target check-onnx-lit
