@@ -75,7 +75,7 @@ RUN apt-get update && apt-get install -y openssh-server git && \
     echo 'root:root' | chpasswd && \
     sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
 
-RUN ACCEL=NNPA NPROC=80 WORKDIR=/workdir LLVM_PROJECT_ROOT=${WORKDIR}/llvm-project \
+RUN ACCEL=ARX NPROC=80 WORKDIR=/workdir LLVM_PROJECT_ROOT=${WORKDIR}/llvm-project \
     cd ${WORKDIR} && \
     git clone --recursive https://gitlab.com/ones-ai/mlir-arx -b chacha/mlir-arx && \
     cd mlir-arx && \
@@ -88,7 +88,6 @@ RUN ACCEL=NNPA NPROC=80 WORKDIR=/workdir LLVM_PROJECT_ROOT=${WORKDIR}/llvm-proje
                 -DMLIR_DIR=${LLVM_PROJECT_ROOT}/build/lib/cmake/mlir  \
                 -DONNX_MLIR_ACCELERATORS=${ACCEL} \
                 ..  && \
-    cmake --build . --target onnx-mlir && \
-    cmake --build . --target check-onnx-lit
+    cmake --build .
 
 CMD ["/usr/sbin/sshd", "-D"]
