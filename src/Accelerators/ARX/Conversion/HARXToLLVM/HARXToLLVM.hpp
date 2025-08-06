@@ -23,8 +23,7 @@ namespace onnx_mlir {
 namespace larx {
 
 /// Populate all conversion patterns for HARX Ops.
-void populateHARXToLLVMConversionPattern(mlir::RewritePatternSet &patterns,
-    mlir::LLVMTypeConverter &typeConverter, mlir::MLIRContext *ctx);
+void populateHARXToLLVMConversionPattern(mlir::RewritePatternSet &patterns, mlir::LLVMTypeConverter &typeConverter, mlir::MLIRContext *ctx);
 
 } // namespace larx
 } // namespace onnx_mlir

@@ -1,6 +1,8 @@
 add_onnx_mlir_library(OMHARXToLLVM
   HARXToLLVM.cpp
   HARXToLLVMPass.cpp
+  pass/RewriteHarx.cpp
+  pass/EmitSetup.cpp
 
   DEPENDS
 

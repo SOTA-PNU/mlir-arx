@@ -44,8 +44,8 @@ namespace harx {
 
 LogicalResult EraseEntryPointPattern::matchAndRewrite(
     ONNXEntryPointOp op, mlir::PatternRewriter &rewriter) const {
-rewriter.eraseOp(op);          // marker 제거
-return mlir::success();
+    rewriter.eraseOp(op);          // marker 제거
+    return mlir::success();
 }
 
 LogicalResult EraseFuncOnnxPattern::matchAndRewrite(func::FuncOp fn, PatternRewriter &rewriter) const {

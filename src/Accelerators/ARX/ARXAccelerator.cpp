@@ -105,6 +105,9 @@ void ARXAccelerator::registerPasses(int optLevel) const {
   mlir::registerPass([]() -> std::unique_ptr<mlir::Pass> {
     return onnx_mlir::createONNXToHARXPass();
   });
+  mlir::registerPass([]() -> std::unique_ptr<mlir::Pass> {
+    return onnx_mlir::createHARXToLLVMPass();
+  });
   // mlir::registerPass([]() -> std::unique_ptr<mlir::Pass> {
   //   return onnx_mlir::createZHighToONNXPass();
   // });
