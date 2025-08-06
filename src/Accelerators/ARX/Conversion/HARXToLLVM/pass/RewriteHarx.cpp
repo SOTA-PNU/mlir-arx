@@ -137,12 +137,11 @@ LogicalResult QuantizeToEmitCPattern::matchAndRewrite(harx::HARXQuantizationOp o
   
   auto symRef = mlir::FlatSymbolRefAttr::get(rewriter.getContext(), harxName);
   auto getGlobal = rewriter.create<mlir::emitc::GetGlobalOp>(op.getLoc(), outputTy, symRef).getResult();
-  // auto getGlobal = rewriter.create<mlir::emitc::LiteralOp>(op.getLoc(), outputTy, harxName).getResult();
 
   auto fnInputTy = op.getInput().getType();
   auto inputTy = emitc::ArrayType::get(fnInputTy.getShape(), fnInputTy.getElementType());
-  auto inAttr = op.getInput();
-  // auto inAttr = rewriter.create<UnrealizedConversionCastOp>(op.getLoc(), inputTy, op.getInput()).getResult(0);
+  // auto inAttr = op.getInput();
+  auto inAttr = rewriter.create<UnrealizedConversionCastOp>(op.getLoc(), inputTy, op.getInput()).getResult(0);
 
   auto ui8Ptr = emitc::PointerType::get(ui8Ty);
   auto fp32Ptr = emitc::PointerType::get(fp32Ty);

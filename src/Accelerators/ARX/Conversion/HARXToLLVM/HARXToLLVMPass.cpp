@@ -181,39 +181,39 @@ void HARXToLLVMLoweringPass::runOnOperation() {
   },
   /*results*/ {i32Ty}), "transpose_i8");
 
-    module.walk([&](func::FuncOp fn) {
-      if (fn.getName() != "main_graph")
-        return;
-      auto ctx = &getContext();
+    // module.walk([&](func::FuncOp fn) {
+    //   if (fn.getName() != "main_graph")
+    //     return;
+    //   auto ctx = &getContext();
       
-      //--- 1) 새 함수 시그니처 만들기 ----------------------------
-      FunctionType oldTy = fn.getFunctionType();
+    //   //--- 1) 새 함수 시그니처 만들기 ----------------------------
+    //   FunctionType oldTy = fn.getFunctionType();
 
-      SmallVector<Type> inputs(oldTy.getInputs().begin(),
-                               oldTy.getInputs().end());
-      inputs.push_back(oldTy.getResult(0));                 // %arg1 추가
-      // SmallVector<Type> results;             // 반환은 void
+    //   SmallVector<Type> inputs(oldTy.getInputs().begin(),
+    //                            oldTy.getInputs().end());
+    //   inputs.push_back(oldTy.getResult(0));                 // %arg1 추가
+    //   // SmallVector<Type> results;             // 반환은 void
 
-      auto newTy   = FunctionType::get(ctx, inputs, {});
-      fn.setType(newTy);
+    //   auto newTy   = FunctionType::get(ctx, inputs, {});
+    //   fn.setType(newTy);
 
-      //--- 2) 엔트리 블록에 arg1 추가 ----------------------------
-      Block &entry = fn.getBody().front();
-      entry.addArgument(oldTy.getResult(0), fn.getLoc());   // %arg1 : tensor<…>
+    //   //--- 2) 엔트리 블록에 arg1 추가 ----------------------------
+    //   Block &entry = fn.getBody().front();
+    //   entry.addArgument(oldTy.getResult(0), fn.getLoc());   // %arg1 : tensor<…>
 
-      //--- 3) return 변환 ---------------------------------------
-      // 가정: 함수 안에 return 1개, 하나의 tensor operand만 반환
-      fn.walk([&](func::ReturnOp ret) {
-        Value retVal = ret.getOperand(0);    // 옛날 결과
-        Value outBuf = entry.getArgument(inputs.size() - 1); // %arg1
+    //   //--- 3) return 변환 ---------------------------------------
+    //   // 가정: 함수 안에 return 1개, 하나의 tensor operand만 반환
+    //   fn.walk([&](func::ReturnOp ret) {
+    //     Value retVal = ret.getOperand(0);    // 옛날 결과
+    //     Value outBuf = entry.getArgument(inputs.size() - 1); // %arg1
 
-        OpBuilder b(ret);
-        retVal.replaceAllUsesWith(outBuf);
+    //     OpBuilder b(ret);
+    //     retVal.replaceAllUsesWith(outBuf);
         
-        b.create<func::ReturnOp>(ret.getLoc());
-        ret.erase();
-      });
-    });
+    //     b.create<func::ReturnOp>(ret.getLoc());
+    //     ret.erase();
+    //   });
+    // });
 
     module.print(llvm::outs());
     
