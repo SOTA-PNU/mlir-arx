@@ -141,12 +141,7 @@ void HARXToLLVMLoweringPass::runOnOperation() {
   auto f32Ty = builder.getF32Type();
   auto f32pTy = mlir::emitc::PointerType::get(f32Ty);
 
-  builder.create<emitc::IncludeOp>(module.getLoc(), "stdint.h", true);
-  builder.create<emitc::IncludeOp>(module.getLoc(), "stdlib.h", true);
-  builder.create<emitc::IncludeOp>(module.getLoc(), "string.h", true);
-  builder.create<emitc::IncludeOp>(module.getLoc(), "stdbool.h", true);
-  
-  
+
   CreateFunctions(module, builder,  builder.getFunctionType(
       /*inputs*/  {
         /*input*/ui8pTy, /*kernel*/ui8pTy, /*bias*/i32pTy, /*output*/ui8pTy, /*outputOffset*/ui8pTy, 
@@ -157,13 +152,6 @@ void HARXToLLVMLoweringPass::runOnOperation() {
         /*shift*/i32pTy, /*out_h*/ui8Ty, /*out_w*/ui8Ty
       },
       /*results*/ {i32Ty}), "convolution_i8_shift");
-
-
-//   int fullyconnected_i8_shift(unsigned char* input, unsigned char *kernel, int *bias, unsigned char *output, unsigned char* outputOffset,
-//                             unsigned int inputDim0, unsigned int inputDim1, unsigned int kernelDim0, unsigned int kernelDim1,
-//                             bool doBias, int* shift, unsigned int outputDim0, unsigned int outputDim1)
-// {
-
 
   CreateFunctions(module, builder, builder.getFunctionType(
     /*inputs*/  {
@@ -203,42 +191,6 @@ void HARXToLLVMLoweringPass::runOnOperation() {
   },
   /*results*/ {i32Ty}), "transpose_i8");
 
-    // module.walk([&](func::FuncOp fn) {
-    //   if (fn.getName() != "main_graph")
-    //     return;
-    //   auto ctx = &getContext();
-      
-    //   //--- 1) 새 함수 시그니처 만들기 ----------------------------
-    //   FunctionType oldTy = fn.getFunctionType();
-
-    //   SmallVector<Type> inputs(oldTy.getInputs().begin(),
-    //                            oldTy.getInputs().end());
-    //   inputs.push_back(oldTy.getResult(0));                 // %arg1 추가
-    //   // SmallVector<Type> results;             // 반환은 void
-
-    //   auto newTy   = FunctionType::get(ctx, inputs, {});
-    //   fn.setType(newTy);
-
-    //   //--- 2) 엔트리 블록에 arg1 추가 ----------------------------
-    //   Block &entry = fn.getBody().front();
-    //   entry.addArgument(oldTy.getResult(0), fn.getLoc());   // %arg1 : tensor<…>
-
-    //   //--- 3) return 변환 ---------------------------------------
-    //   // 가정: 함수 안에 return 1개, 하나의 tensor operand만 반환
-    //   fn.walk([&](func::ReturnOp ret) {
-    //     Value retVal = ret.getOperand(0);    // 옛날 결과
-    //     Value outBuf = entry.getArgument(inputs.size() - 1); // %arg1
-
-    //     OpBuilder b(ret);
-    //     retVal.replaceAllUsesWith(outBuf);
-        
-    //     b.create<func::ReturnOp>(ret.getLoc());
-    //     ret.erase();
-    //   });
-    // });
-
-    module.print(llvm::outs());
-    
 
   // // builder.create<emitc::FuncOp>(module.getLoc(), "fullyconnected_i8_scale", )
   // builder.create<emitc::FuncOp>(module.getLoc(), "maxpool_i8", )
@@ -305,51 +257,32 @@ void HARXToLLVMLoweringPass::runOnOperation() {
     }
   });
 
+  builder.create<emitc::IncludeOp>(module.getLoc(), "stdint.h", true);
+  builder.create<emitc::IncludeOp>(module.getLoc(), "stdlib.h", true);
+  builder.create<emitc::IncludeOp>(module.getLoc(), "string.h", true);
+  builder.create<emitc::IncludeOp>(module.getLoc(), "stdbool.h", true);
+  
+
   if (failed(applyPartialConversion(module, target, std::move(patterns))))
+  {
     signalPassFailure();
+    return;
+  }
 
-// module.walk([&](func::FuncOp fn) {
-//   if (fn.getName() != "main_graph") return;
+  auto &topBlock = module.getBodyRegion().front();
 
-//   // 1) Original signature
-//   FunctionType oldType = fn.getFunctionType();
+  // 최상위 블록에서 모든 emitc.include 수집
+  SmallVector<emitc::IncludeOp> includes;
+  for (auto inc : topBlock.getOps<emitc::IncludeOp>()) {
+    includes.push_back(inc);
+  }
 
-//   // 2) Build new input types: change any strided memref to identity layout
-//   SmallVector<Type, 4> newInputs;
-//   for (Type t : oldType.getInputs()) {
-//     if (auto mt = mlir::dyn_cast<MemRefType>(t)) {
-//       auto ctx = fn.getContext();
-//       // identity layout map of same rank
-//       AffineMap idMap = AffineMap::getMultiDimIdentityMap(mt.getRank(), ctx);
-//       // new static memref type
-//       newInputs.push_back(
-//         MemRefType::get(
-//           mt.getShape(),
-//           mt.getElementType(),
-//           idMap,
-//           mt.getMemorySpace()));
-//     } else {
-//       newInputs.push_back(t);
-//     }
-//   }
-
-//   // 3) Results remain unchanged
-//   SmallVector<Type, 4> newResults(oldType.getResults().begin(),
-//                                    oldType.getResults().end());
-
-//   // 4) Create and apply the new FunctionType
-//   OpBuilder builder(fn);
-//   auto newFuncType = builder.getFunctionType(newInputs, newResults);
-//   fn.setType(newFuncType);  // updates external signature :contentReference[oaicite:2]{index=2}
-
-//   // 5) Update the entry block arguments too
-//   Block &entry = fn.getBody().front();
-//   assert(entry.getNumArguments() == newInputs.size() &&
-//          "argument count must match new function type");
-//   for (unsigned i = 0, e = newInputs.size(); i < e; ++i) {
-//     entry.getArgument(i).setType(newInputs[i]);  // patch block arg :contentReference[oaicite:3]{index=3}
-//   }
-// });
+  // 수집된 순서대로 블록 맨 앞로 이동
+  for (auto inc : includes) {
+    // inc.moveBefore(&topBlock, topBlock.begin());
+    // rewriter 가 필요 없다면 위처럼 직접 move 가능
+    inc->moveBefore(&topBlock, topBlock.begin());
+  }
 }
 
 std::unique_ptr<Pass> createHARXToLLVMPass() {

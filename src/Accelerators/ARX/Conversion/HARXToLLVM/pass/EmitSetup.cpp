@@ -41,8 +41,8 @@ LogicalResult FunctionToEmitCPattern::matchAndRewrite(func::FuncOp op, PatternRe
   
   auto f32PtrTy = emitc::PointerType::get(f32Ty);
   auto uiPtr8Ty = emitc::PointerType::get(ui8Ty);
-  newInputs.push_back(f32PtrTy);
-  newInputs.push_back(uiPtr8Ty);
+  newInputs.push_back(emitc::PointerType::get(inpTy.getElementType()));
+  newInputs.push_back(emitc::PointerType::get(retTy.getElementType()));
 
   auto newFuncType = rewriter.getFunctionType(newInputs, TypeRange {});
   auto emitcFuncOp = rewriter.create<emitc::FuncOp>(op.getLoc(), op.getName(), newFuncType);
@@ -53,8 +53,8 @@ LogicalResult FunctionToEmitCPattern::matchAndRewrite(func::FuncOp op, PatternRe
   // emitcFuncOp.front().insertArgument(0, ef32Ty, emitcFuncOp.getLoc());
   emitcFuncOp.front().insertArgument(1, uiPtr8Ty, emitcFuncOp.getLoc());
 
-  emitcFuncOp.getArgument(0).setType(f32PtrTy);
-  emitcFuncOp.getArgument(1).setType(uiPtr8Ty);
+  emitcFuncOp.getArgument(0).setType(emitc::PointerType::get(inpTy.getElementType()));
+  emitcFuncOp.getArgument(1).setType(emitc::PointerType::get(retTy.getElementType()));
 
   Block* entry = &emitcFuncOp.getBody().getBlocks().front();
   
@@ -95,9 +95,12 @@ LogicalResult FunctionToEmitCPattern::matchAndRewrite(func::FuncOp op, PatternRe
         auto resultCastSubPtrAttr = rewriter.create<mlir::emitc::CastOp>(op.getLoc(), ui8Ptr, resultSubPtrAttr).getResult();
 
         auto outputVal = emitcFuncOp.getArgument(1);
-        auto outputAttr = rewriter.create<UnrealizedConversionCastOp>(returnOp.getLoc(), ui8Ptr, outputVal).getResult(0);
+        auto outputAttr = rewriter.create<mlir::emitc::CastOp>(returnOp.getLoc(), ui8Ptr, outputVal).getResult();
+        // auto outputAttr = rewriter.create<UnrealizedConversionCastOp>(returnOp.getLoc(), ui8Ptr, outputVal).getResult(0);
 
-        rewriter.create<emitc::CallOpaqueOp>(returnOp.getLoc(), ui8Ptr, "memcpy", ValueRange{ resultCastSubPtrAttr, outputAttr, retSize });
+        rewriter.create<emitc::CallOpaqueOp>(returnOp.getLoc(), TypeRange{}, "memcpy", ValueRange{ resultCastSubPtrAttr, outputAttr, retSize });
+        // rewriter.create<emitc::CastOp>(returnOp.getLoc(), emitc::PointerType::get(retTy.getElementType()), outputAttr);
+
         auto emitRetOp = rewriter.create<emitc::ReturnOp>(returnOp.getLoc(), mlir::Value());
         rewriter.replaceOp(returnOp, emitRetOp);
     });

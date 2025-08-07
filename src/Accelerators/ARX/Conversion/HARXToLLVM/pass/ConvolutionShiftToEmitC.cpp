@@ -49,6 +49,10 @@ LogicalResult ConvolutionShiftToEmitCPattern::matchAndRewrite(harx::HARXConvolut
 
   auto retTy = op.getOutput().getType();
   auto outputTy = emitc::ArrayType::get(retTy.getShape(), ui8Ty);
+  auto outputOffsetTy = emitc::ArrayType::get({1}, ui8Ty);
+  
+  auto shiftScale = op.getOutputShift();
+  auto shiftScaleTy = emitc::ArrayType::get({shiftScale.getType().getNumElements()}, shiftScale.getType().getElementType());
 
   {
     OpBuilder::InsertionGuard g(rewriter);
@@ -57,17 +61,34 @@ LogicalResult ConvolutionShiftToEmitCPattern::matchAndRewrite(harx::HARXConvolut
     rewriter.setInsertionPointToStart(module.getBody());
     rewriter.create<mlir::emitc::GlobalOp>(module.getLoc(),
       /* sym_name */      rewriter.getStringAttr(harxName.str() + "_kernel"),
-      /* type */          kernelEmitTy, kernelVal, false, true, true);
+      /* type */          kernelEmitTy, kernelVal, false, true, false);
 
     rewriter.setInsertionPointToStart(module.getBody());
     rewriter.create<mlir::emitc::GlobalOp>(module.getLoc(),
       /* sym_name */      rewriter.getStringAttr(harxName.str() + "_bias"),
-      /* type */          biasEmitTy, biasVal, false, true, true);
+      /* type */          biasEmitTy, biasVal, false, true, false);
 
 
     rewriter.create<mlir::emitc::GlobalOp>(module.getLoc(),
       /* sym_name */      rewriter.getStringAttr(harxName.str() + "_output"),
       /* type */          outputTy, Attribute(), false, true, false);
+
+    // output offset
+    auto outputOffset = op.getOutputOffset();
+    SmallVector<APInt, 1> outputOffsetVec;
+    outputOffsetVec.push_back(APInt(8, outputOffset, false));
+    auto outputOffsetDenseAttr = DenseIntElementsAttr::get(RankedTensorType::get({1}, ui8Ty), outputOffsetVec);
+    rewriter.create<mlir::emitc::GlobalOp>(op.getLoc(), rewriter.getStringAttr(harxName.str() + "_output_offset"), outputOffsetTy, outputOffsetDenseAttr, false, true, false);
+
+    // shift
+    SmallVector<APInt> shiftScaleVec;
+    auto shiftValueAttr = shiftScale.getDefiningOp<harx::HARXConstantOp>().getValueAttr();
+    shiftScaleVec.reserve(shiftScale.getType().getNumElements());
+    for (auto item : shiftValueAttr.getValues<APInt>()) {
+      shiftScaleVec.push_back(APInt(32, item.getSExtValue(), true));
+    }
+    auto shiftScaleDenseAttr = DenseIntElementsAttr::get(RankedTensorType::get(shiftScaleTy.getShape(), shiftScaleTy.getElementType()), shiftScaleVec);
+    rewriter.create<mlir::emitc::GlobalOp>(op.getLoc(), rewriter.getStringAttr(harxName.str() + "_shift_scale"), shiftScaleTy, shiftScaleDenseAttr, false, true, false);
   }
 
   auto kernelSymRef = mlir::FlatSymbolRefAttr::get(rewriter.getContext(), rewriter.getStringAttr(harxName.str() + "_kernel"));
@@ -79,12 +100,12 @@ LogicalResult ConvolutionShiftToEmitCPattern::matchAndRewrite(harx::HARXConvolut
   auto outputSymRef = mlir::FlatSymbolRefAttr::get(rewriter.getContext(), rewriter.getStringAttr(harxName.str() + "_output"));
   auto outputAttr = rewriter.create<mlir::emitc::GetGlobalOp>(op.getLoc(), outputTy, outputSymRef).getResult();
 
-  auto outputOffset = op.getOutputOffset();
-  auto outputOffsetTy = emitc::ArrayType::get({1}, ui8Ty);
-  SmallVector<APInt, 1> outputOffsetVec;
-  outputOffsetVec.push_back(APInt(8, outputOffset, false));
-  auto outputOffsetDenseAttr = DenseIntElementsAttr::get(outputOffsetTy, outputOffsetVec);
-  auto outputOffsetAttr = rewriter.create<mlir::emitc::VariableOp>(op.getLoc(), outputOffsetTy, outputOffsetDenseAttr).getResult();
+  auto outputOffsetSymRef = mlir::FlatSymbolRefAttr::get(rewriter.getContext(), rewriter.getStringAttr(harxName.str() + "_output_offset"));
+  auto outputOffsetAttr = rewriter.create<mlir::emitc::GetGlobalOp>(op.getLoc(), outputOffsetTy, outputOffsetSymRef).getResult();
+
+  auto shiftScaleSymRef = mlir::FlatSymbolRefAttr::get(rewriter.getContext(), rewriter.getStringAttr(harxName.str() + "_shift_scale"));
+  auto shiftScaleAttr = rewriter.create<mlir::emitc::GetGlobalOp>(op.getLoc(), shiftScaleTy, shiftScaleSymRef).getResult();
+
 
 
   auto inputTy = op.getInput().getType();
@@ -130,18 +151,6 @@ LogicalResult ConvolutionShiftToEmitCPattern::matchAndRewrite(harx::HARXConvolut
   auto doBiasVal = rewriter.getIntegerAttr(doBiasTy, doBias);
   auto doBiasAttr = rewriter.create<mlir::emitc::ConstantOp>(op.getLoc(), doBiasTy, doBiasVal).getResult();
   
-  // shift
-  auto shiftScale = op.getOutputShift();
-  auto shiftScaleTy = emitc::ArrayType::get({shiftScale.getType().getNumElements()}, shiftScale.getType().getElementType());
-  SmallVector<APInt> shiftScaleVec;
-  auto shiftValueAttr = shiftScale.getDefiningOp<harx::HARXConstantOp>().getValueAttr();
-  shiftScaleVec.reserve(shiftScale.getType().getNumElements());
-  for (auto item : shiftValueAttr.getValues<APInt>()) {
-    shiftScaleVec.push_back(APInt(32, item.getSExtValue(), true));
-  }
-  auto shiftScaleDenseAttr = DenseIntElementsAttr::get(shiftScaleTy, shiftScaleVec);
-  auto shiftScaleAttr = rewriter.create<mlir::emitc::VariableOp>(op.getLoc(), shiftScaleTy, shiftScaleDenseAttr).getResult();
-
   // NCHW
   // out_w, out_h
   auto outHeightVal = rewriter.getIntegerAttr(ui8Ty, retTy.getDimSize(2));

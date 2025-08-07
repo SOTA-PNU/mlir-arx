@@ -57,20 +57,7 @@ LogicalResult FullyConnectedToEmitCPattern::matchAndRewrite(harx::HARXMatMulOp o
   auto doBias = op.getDoBias();
   auto doBiasAttr = rewriter.create<mlir::emitc::ConstantOp>(op.getLoc(), i1Ty, rewriter.getIntegerAttr(i1Ty, doBias)).getResult();
 
-  // shift
-  auto shiftScale = op.getShift();
-  auto shiftScaleTy = emitc::ArrayType::get({shiftScale.getType().getNumElements()}, shiftScale.getType().getElementType());
-  SmallVector<APInt> shiftScaleVec;
-  auto shiftValueAttr = shiftScale.getDefiningOp<harx::HARXConstantOp>().getValueAttr();
-  shiftScaleVec.reserve(shiftScale.getType().getNumElements());
-  for (auto item : shiftValueAttr.getValues<APInt>()) {
-    shiftScaleVec.push_back(APInt(32, item.getSExtValue(), true));
-  }
-  auto shiftScaleDenseAttr = DenseIntElementsAttr::get(shiftScaleTy, shiftScaleVec);
-  auto shiftScaleAttr = rewriter.create<mlir::emitc::VariableOp>(op.getLoc(), shiftScaleTy, shiftScaleDenseAttr).getResult();
-  auto shiftScaleSubAttr = rewriter.create<mlir::emitc::SubscriptOp>(op.getLoc(), ei32Ty, shiftScaleAttr, ValueRange { dim }).getResult();
-  auto shiftScaleSubPtrAttr = rewriter.create<mlir::emitc::ApplyOp>(op.getLoc(), i32Ptr, ptrOp, shiftScaleSubAttr).getResult();
-  
+ 
   auto module = op->getParentOfType<ModuleOp>();
   auto harxName = op.getOperation()->getAttrOfType<mlir::StringAttr>("harx_name");
 
@@ -86,6 +73,12 @@ LogicalResult FullyConnectedToEmitCPattern::matchAndRewrite(harx::HARXMatMulOp o
   auto outputTy = op.getOutput().getType();
   auto outputEmitTy = mlir::emitc::ArrayType::get(outputTy.getShape(), outputTy.getElementType());
 
+
+  auto outputOffset = op.getOutputOffset();
+  auto outputOffsetTy = emitc::ArrayType::get({1}, ui8Ty);
+
+  auto shiftScale = op.getShift();
+  auto shiftScaleTy = emitc::ArrayType::get({shiftScale.getType().getNumElements()}, shiftScale.getType().getElementType());
   {
     OpBuilder::InsertionGuard g(rewriter);
     rewriter.setInsertionPointToStart(module.getBody());
@@ -93,17 +86,41 @@ LogicalResult FullyConnectedToEmitCPattern::matchAndRewrite(harx::HARXMatMulOp o
     rewriter.setInsertionPointToStart(module.getBody());
     rewriter.create<mlir::emitc::GlobalOp>(module.getLoc(),
       /* sym_name */      rewriter.getStringAttr(harxName.str() + "_kernel"),
-      /* type */          kernelEmitTy, kernelVal, false, true, true);
+      /* type */          kernelEmitTy, kernelVal, false, true, false);
 
     rewriter.setInsertionPointToStart(module.getBody());
     rewriter.create<mlir::emitc::GlobalOp>(module.getLoc(),
       /* sym_name */      rewriter.getStringAttr(harxName.str() + "_bias"),
-      /* type */          biasEmitTy, biasVal, false, true, true);
+      /* type */          biasEmitTy, biasVal, false, true, false);
 
     rewriter.create<mlir::emitc::GlobalOp>(module.getLoc(),
       /* sym_name */      rewriter.getStringAttr(harxName.str() + "_output"),
       /* type */          outputEmitTy, Attribute(), false, true, false);
+
+    SmallVector<APInt, 1> outputOffsetVec;
+    outputOffsetVec.push_back(APInt(8, outputOffset, false));
+    auto outputOffsetDenseAttr = DenseIntElementsAttr::get(RankedTensorType::get(outputOffsetTy.getShape(), outputOffsetTy.getElementType()), outputOffsetVec);
+    rewriter.create<mlir::emitc::GlobalOp>(op.getLoc(), rewriter.getStringAttr(harxName.str() + "_output_offset"),
+                                                outputOffsetTy, outputOffsetDenseAttr,
+                                                false, true, false);
+
+    SmallVector<APInt> shiftScaleVec;
+    auto shiftValueAttr = shiftScale.getDefiningOp<harx::HARXConstantOp>().getValueAttr();
+    shiftScaleVec.reserve(shiftScale.getType().getNumElements());
+    for (auto item : shiftValueAttr.getValues<APInt>()) {
+      shiftScaleVec.push_back(APInt(32, item.getSExtValue(), true));
+    }
+    auto shiftScaleDenseAttr = DenseIntElementsAttr::get(RankedTensorType::get(shiftScaleTy.getShape(), shiftScaleTy.getElementType()), shiftScaleVec);
+    rewriter.create<mlir::emitc::GlobalOp>(op.getLoc(), rewriter.getStringAttr(harxName.str() + "_shift_scale"), shiftScaleTy, shiftScaleDenseAttr, false, true, false);
+
   }
+
+  // shift
+  auto shiftScaleSymRef = mlir::FlatSymbolRefAttr::get(rewriter.getContext(), rewriter.getStringAttr(harxName.str() + "_shift_scale"));
+  auto shiftScaleAttr = rewriter.create<mlir::emitc::GetGlobalOp>(op.getLoc(), shiftScaleTy, shiftScaleSymRef).getResult();
+  auto shiftScaleSubAttr = rewriter.create<mlir::emitc::SubscriptOp>(op.getLoc(), ei32Ty, shiftScaleAttr, ValueRange { dim }).getResult();
+  auto shiftScaleSubPtrAttr = rewriter.create<mlir::emitc::ApplyOp>(op.getLoc(), i32Ptr, ptrOp, shiftScaleSubAttr).getResult();
+  
 
   auto kernelSymRef = mlir::FlatSymbolRefAttr::get(rewriter.getContext(), rewriter.getStringAttr(harxName.str() + "_kernel"));
   auto kernelAttr = rewriter.create<mlir::emitc::GetGlobalOp>(op.getLoc(), kernelEmitTy, kernelSymRef).getResult();
@@ -120,15 +137,11 @@ LogicalResult FullyConnectedToEmitCPattern::matchAndRewrite(harx::HARXMatMulOp o
   auto outputSubAttr = rewriter.create<mlir::emitc::SubscriptOp>(op.getLoc(), eui8Ty, outputAttr, ValueRange { dim, dim }).getResult();
   auto outputSubPtrAttr = rewriter.create<mlir::emitc::ApplyOp>(op.getLoc(), ui8Ptr, ptrOp, outputSubAttr).getResult();
 
-
-  auto outputOffset = op.getOutputOffset();
-  auto outputOffsetTy = emitc::ArrayType::get({1}, ui8Ty);
-  SmallVector<APInt, 1> outputOffsetVec;
-  outputOffsetVec.push_back(APInt(8, outputOffset, false));
-  auto outputOffsetDenseAttr = DenseIntElementsAttr::get(outputOffsetTy, outputOffsetVec);
-  auto outputOffsetAttr = rewriter.create<mlir::emitc::VariableOp>(op.getLoc(), outputOffsetTy, outputOffsetDenseAttr).getResult();
+  auto outputOffsetSymRef = mlir::FlatSymbolRefAttr::get(rewriter.getContext(), rewriter.getStringAttr(harxName.str() + "_output_offset"));
+  auto outputOffsetAttr = rewriter.create<mlir::emitc::GetGlobalOp>(op.getLoc(), outputOffsetTy, outputOffsetSymRef).getResult();
   auto outputOffsetSubAttr = rewriter.create<mlir::emitc::SubscriptOp>(op.getLoc(), eui8Ty, outputOffsetAttr, ValueRange { dim }).getResult();
   auto outputOffsetSubPtrAttr = rewriter.create<mlir::emitc::ApplyOp>(op.getLoc(), ui8Ptr, ptrOp, outputOffsetSubAttr).getResult();
+
 
   // unsigned char* input, unsigned char *kernel, int *bias, unsigned char *output, unsigned char* outputOffset
   auto inputSubPtrAttr = rewriter.create<UnrealizedConversionCastOp>(op.getLoc(), ui8Ptr, op.getInput()).getResult(0);

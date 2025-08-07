@@ -46,15 +46,6 @@ LogicalResult DequantizeToEmitCPattern::matchAndRewrite(harx::HARXDequantization
   DenseFPElementsAttr scaleDenseAttr = DenseFPElementsAttr::get(scaleTy, scaleValues);
   auto scaleAttr = rewriter.create<mlir::emitc::VariableOp>(op.getLoc(), scaleTy, scaleDenseAttr).getResult();
 
-  auto offsetVal = op.getOffsetAttr();
-  auto offsetTy = emitc::ArrayType::get({channelSizeNum}, ui8Ty);
-  SmallVector<APInt> offsetVec;
-  for (int i = 0; i < (int)channelSizeNum; ++i) {
-    offsetVec.push_back(offsetVal.getValue());
-  }
-  DenseIntElementsAttr offsetDenseAttr = DenseIntElementsAttr::get(offsetTy, offsetVec);
-  auto offsetAttr = rewriter.create<mlir::emitc::VariableOp>(op.getLoc(), offsetTy, offsetDenseAttr).getResult();
-  
   auto useStrideTy = rewriter.getI1Type();
   auto useStrideVal = rewriter.getIntegerAttr(useStrideTy, op.getUseStride() == 1);
   auto useStrideAttr = rewriter.create<mlir::emitc::ConstantOp>(op.getLoc(), useStrideTy, useStrideVal).getResult();
@@ -64,16 +55,29 @@ LogicalResult DequantizeToEmitCPattern::matchAndRewrite(harx::HARXDequantization
   auto outputTy = emitc::ArrayType::get(retTy.getShape(), fp32Ty);
   auto module = op.getOperation()->getParentOfType<mlir::ModuleOp>();
   auto dequantFn = module.lookupSymbol<emitc::FuncOp>("dequantize");
-  if (!module.lookupSymbol<mlir::emitc::GlobalOp>(harxName)) {
+  
+  auto offsetTy = emitc::ArrayType::get({channelSizeNum}, ui8Ty);
+  {
     OpBuilder::InsertionGuard g(rewriter);
     rewriter.setInsertionPointToStart(module.getBody());
     rewriter.create<mlir::emitc::GlobalOp>(module.getLoc(),
       /* sym_name */      harxName,
       /* type */          outputTy, Attribute(), false, true, false);
+
+    auto offsetVal = op.getOffsetAttr();
+    SmallVector<APInt> offsetVec;
+    for (int i = 0; i < (int)channelSizeNum; ++i) {
+      offsetVec.push_back(offsetVal.getValue());
+    }
+    DenseIntElementsAttr offsetDenseAttr = DenseIntElementsAttr::get(RankedTensorType::get(offsetTy.getShape(), offsetTy.getElementType()), offsetVec);
+    rewriter.create<mlir::emitc::GlobalOp>(op.getLoc(), rewriter.getStringAttr(harxName.str() + "_offset"), offsetTy, offsetDenseAttr, false, true, false);
   }
 
   auto symRef = mlir::FlatSymbolRefAttr::get(rewriter.getContext(), harxName);
   auto getGlobal = rewriter.create<mlir::emitc::GetGlobalOp>(op.getLoc(), outputTy, symRef).getResult();
+
+  auto offsetSymRef = mlir::FlatSymbolRefAttr::get(rewriter.getContext(), rewriter.getStringAttr(harxName.str() + "_offset"));
+  auto offsetAttr = rewriter.create<mlir::emitc::GetGlobalOp>(op.getLoc(), offsetTy, offsetSymRef).getResult();
 
   auto fnInputTy = op.getInput().getType();
   auto inputTy = emitc::ArrayType::get(fnInputTy.getShape(), fnInputTy.getElementType());
