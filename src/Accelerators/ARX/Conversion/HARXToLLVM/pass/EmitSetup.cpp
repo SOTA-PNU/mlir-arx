@@ -98,7 +98,7 @@ LogicalResult FunctionToEmitCPattern::matchAndRewrite(func::FuncOp op, PatternRe
         auto outputAttr = rewriter.create<mlir::emitc::CastOp>(returnOp.getLoc(), ui8Ptr, outputVal).getResult();
         // auto outputAttr = rewriter.create<UnrealizedConversionCastOp>(returnOp.getLoc(), ui8Ptr, outputVal).getResult(0);
 
-        rewriter.create<emitc::CallOpaqueOp>(returnOp.getLoc(), TypeRange{}, "memcpy", ValueRange{ resultCastSubPtrAttr, outputAttr, retSize });
+        rewriter.create<emitc::CallOpaqueOp>(returnOp.getLoc(), TypeRange{}, "memcpy", ValueRange{ outputAttr, resultCastSubPtrAttr, retSize });
         // rewriter.create<emitc::CastOp>(returnOp.getLoc(), emitc::PointerType::get(retTy.getElementType()), outputAttr);
 
         auto emitRetOp = rewriter.create<emitc::ReturnOp>(returnOp.getLoc(), mlir::Value());

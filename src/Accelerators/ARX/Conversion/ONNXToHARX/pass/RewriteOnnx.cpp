@@ -113,50 +113,50 @@ mlir::LogicalResult RewriteOnnxDequantToArxPattern::matchAndRewrite(ONNXDequanti
 }
 
 
-// SmallVector<APInt> computeShift(
-//     float input_scale,
-//     float output_scale,
-//     const SmallVector<APInt> &kernel_scale,
-//     int channel_size) 
-// {
-//     // 1) 결과 벡터 초기화
-//     std::vector<int32_t> shift_values(channel_size, 0);
+std::vector<int32_t> computeShift(
+    float input_scale,
+    float output_scale,
+    std::vector<float> kernel_scale,
+    int channel_size) 
+{
+    // 1) 결과 벡터 초기화
+    std::vector<int32_t> shift_values(channel_size, 0);
 
-//     for (int i = 0; i < channel_size; ++i) {
-//         // 2) shift_quantized 계산
-//         float shift_quantized = kernel_scale[i] * input_scale / output_scale;
+    for (int i = 0; i < channel_size; ++i) {
+        // 2) shift_quantized 계산
+        float shift_quantized = kernel_scale[i] * input_scale / output_scale;
 
-//         // 3) 0 이하 예외 처리
-//         if (shift_quantized <= 0.0f) {
-//             shift_values[i] = 0;
-//             continue;
-//         }
+        // 3) 0 이하 예외 처리
+        if (shift_quantized <= 0.0f) {
+            shift_values[i] = 0;
+            continue;
+        }
 
-//         // 4) M과 shift_cnt 초기화
-//         float M = shift_quantized;
-//         int shift_cnt = 0;
+        // 4) M과 shift_cnt 초기화
+        float M = shift_quantized;
+        int shift_cnt = 0;
 
-//         // 5) M > 1.0 → 1 미만이 될 때까지 2로 나누기
-//         while (M > 1.0f) {
-//             M /= 2.0f;
-//             ++shift_cnt;
-//         }
+        // 5) M > 1.0 → 1 미만이 될 때까지 2로 나누기
+        while (M > 1.0f) {
+            M /= 2.0f;
+            ++shift_cnt;
+        }
 
-//         // 6) M <= 0.5 → 0.5 초과가 될 때까지 2로 곱하기
-//         while (M <= 0.5f) {
-//             M *= 2.0f;
-//             --shift_cnt;
-//         }
+        // 6) M <= 0.5 → 0.5 초과가 될 때까지 2로 곱하기
+        while (M <= 0.5f) {
+            M *= 2.0f;
+            --shift_cnt;
+        }
 
-//         // 7) 음수면 양수로
-//         if (shift_cnt < 0)
-//             shift_cnt = -shift_cnt;
+        // 7) 음수면 양수로
+        if (shift_cnt < 0)
+            shift_cnt = -shift_cnt;
 
-//         shift_values[i] = static_cast<int32_t>(shift_cnt);
-//     }
+        shift_values[i] = static_cast<int32_t>(shift_cnt);
+    }
 
-//     return shift_values;
-// }
+    return shift_values;
+}
 
 
 mlir::LogicalResult RewriteOnnxFCToArxFCPattern::matchAndRewrite(ONNXCustomOp op, mlir::PatternRewriter &rewriter) const {
@@ -198,7 +198,8 @@ mlir::LogicalResult RewriteOnnxFCToArxFCPattern::matchAndRewrite(ONNXCustomOp op
     data.reserve(ui8_array.getNumElements());
     for (auto item : biasAttr.getValues<APInt>()) { 
         auto value = item.getSExtValue();
-        data.push_back(APInt(32, value, true, true));
+        value = value < 0 ? value + 256 : value;
+        data.push_back(APInt(32, value - 127, true));
     }
     
     auto denseAttr = DenseElementsAttr::get(i32_array, data);
@@ -216,21 +217,29 @@ mlir::LogicalResult RewriteOnnxFCToArxFCPattern::matchAndRewrite(ONNXCustomOp op
     auto C_zero_point_value = mlir::cast<DenseIntElementsAttr>(C_zero_point_ui8.getDefiningOp<ONNXConstantOp>().getValueAttr()).getValues<APInt>()[0].getSExtValue();
     auto C_zero_point_i32 = rewriter.getI32IntegerAttr(C_zero_point_value);
 
-    // auto scale3_float32 = onnx_matmul_op.getAScale(); 
-    auto scale5_float32 = op.getInputs()[6]; // getCScale(); 
-    auto w_scale3_float32 = onnx_matmul_op.getBScale(); // BScale
+    auto inputScaleDenseAttr = mlir::cast<DenseElementsAttr>(onnx_matmul_op.getAScale().getDefiningOp<ONNXConstantOp>().getValueAttr()); 
+    auto inputScaleAttr = inputScaleDenseAttr.getValues<APFloat>()[0].convertToFloat();
+
+    auto outputScaleDenseAttr = mlir::cast<DenseElementsAttr>(op.getInputs()[6].getDefiningOp<ONNXConstantOp>().getValueAttr());
+    auto outputScaleAttr = outputScaleDenseAttr.getValues<APFloat>()[0].convertToFloat();
+
+    auto weightScaleDenseAttr = mlir::cast<DenseElementsAttr>(onnx_matmul_op.getBScale().getDefiningOp<ONNXConstantOp>().getValueAttr());
+    std::vector<float> weightScaleVecAttr;
+    for (auto item : weightScaleDenseAttr.getValues<APFloat>()) {
+        auto value = item.convertToFloat();
+        weightScaleVecAttr.push_back(value);
+    }
+    auto shiftScaleVec = computeShift(inputScaleAttr, outputScaleAttr, weightScaleVecAttr, weightScaleVecAttr.size());
+
     // auto bScale = mlir::cast<DenseIntElementsAttr>(scale3_float32.getType());
     // llvm::dbgs() << "bScale : " << bScale << "\n";
-    llvm::dbgs() << "w_scale3_float32 : " << w_scale3_float32 << "\n";
-    llvm::dbgs() << "scale5_float32 : " << scale5_float32 << "\n";
 
-    // shift3_scale_int32 = compute_shift(scale3_float32, scale5_float32, w_scale3_float32, 10);
+
 
     SmallVector<APInt> shift_data;
     shift_data.reserve(ui8_array.getNumElements());
-    for (auto item : biasAttr.getValues<APInt>()) { 
-        auto value = item.getSExtValue();
-        shift_data.push_back(APInt(32, value, true, true));
+    for (auto item : shiftScaleVec) { 
+        shift_data.push_back(APInt(32, item, true));
     }
     auto shiftDenseAttr = DenseElementsAttr::get(i32_array, shift_data);
     auto newShiftAttr = rewriter.create<HARXConstantOp>(
@@ -389,10 +398,26 @@ mlir::LogicalResult RewriteOnnxQConv2DToArxPattern::matchAndRewrite(ONNXQLinearC
     auto kernel_attr = op.getW().getDefiningOp<ONNXConstantOp>().getValueAttr();
     auto bias_attr = op.getB().getDefiningOp<ONNXConstantOp>().getValueAttr();
 
-    // auto scale1_float32 = op.getXScale(); 
-    // auto scale2_float32 = op.getYScale();
-    auto w_scale1_float32 = op.getWScale().getDefiningOp<ONNXConstantOp>().getValueAttr(); // BScale
-    // auto shift1_scale_int32 = compute_shift(scale1_float32, scale2_float32, w_scale1_float32, 8)
+    auto inputScaleDenseAttr = mlir::cast<DenseElementsAttr>(op.getXScale().getDefiningOp<ONNXConstantOp>().getValueAttr());
+    auto inputScaleAttr = inputScaleDenseAttr.getValues<APFloat>()[0].convertToFloat();
+    auto outputScaleDenseAttr = mlir::cast<DenseElementsAttr>(op.getYScale().getDefiningOp<ONNXConstantOp>().getValueAttr());
+    auto outputScaleAttr = outputScaleDenseAttr.getValues<APFloat>()[0].convertToFloat();
+
+    auto weightScaleDenseAttr = mlir::cast<DenseElementsAttr>(op.getWScale().getDefiningOp<ONNXConstantOp>().getValueAttr());
+    std::vector<float> weightScaleVecAttr;
+    for (auto item : weightScaleDenseAttr.getValues<APFloat>()) {
+        auto value = item.convertToFloat();
+        weightScaleVecAttr.push_back(value);
+    }
+
+    llvm::dbgs() << "\t\t" << inputScaleAttr << "\n\n";
+    llvm::dbgs() << "\t\t" << outputScaleAttr << "\n\n";
+    llvm::dbgs() << "\t\t" << weightScaleDenseAttr << "\n\n";
+
+    auto shiftScaleVec = computeShift(inputScaleAttr, outputScaleAttr, weightScaleVecAttr, weightScaleVecAttr.size());
+
+    
+    // auto xScaleValue = scale1_float32.getValues<APFloat>()[0].convertToFloat();
 
     auto kernel_elem_attr = mlir::cast<DenseElementsAttr>(kernel_attr);
     auto kernel_i8_shape = mlir::cast<ShapedType>(kernel_elem_attr.getType());
@@ -419,7 +444,7 @@ mlir::LogicalResult RewriteOnnxQConv2DToArxPattern::matchAndRewrite(ONNXQLinearC
     bias_ui8.reserve(bias_elem_attr.getNumElements());
     for (auto item : bias_elem_attr.getValues<APInt>()) {
         auto value = item.getSExtValue();
-        bias_ui8.push_back(APInt(32, value + 127, true));
+        bias_ui8.push_back(APInt(32, value, true));
     }
     auto bias_dense_attr = DenseElementsAttr::get(bias_ui8_shape, bias_ui8);
     auto bias_op = rewriter.create<HARXConstantOp>(
@@ -430,13 +455,12 @@ mlir::LogicalResult RewriteOnnxQConv2DToArxPattern::matchAndRewrite(ONNXQLinearC
                            rewriter.getNamedAttr("value", bias_dense_attr)
                         });
                         
-    auto kernel_scale_attr = mlir::cast<DenseElementsAttr>(w_scale1_float32);
-    auto kernel_scale_fp32_shape = mlir::cast<ShapedType>(kernel_scale_attr.getType());
-    auto kernel_scale_i32_shape = kernel_scale_fp32_shape.clone(rewriter.getIntegerType(32, true));
+
+    auto kernel_scale_i32_shape = weightScaleDenseAttr.getType().clone(rewriter.getIntegerType(32, true));
     SmallVector<APInt> kernel_scale_i32;
-    for (auto item : kernel_scale_attr.getValues<APFloat>()) {
+    for (auto item : shiftScaleVec) {
         // auto value = item.convertToDouble();
-        kernel_scale_i32.push_back(APInt(32, 0, true));
+        kernel_scale_i32.push_back(APInt(32, item, true));
     }
     auto kernel_scale_dense_attr = DenseElementsAttr::get(kernel_scale_i32_shape, kernel_scale_i32);
     auto kernel_scale_op = rewriter.create<HARXConstantOp>(

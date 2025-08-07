@@ -75,7 +75,8 @@ struct HARXToLLVMLoweringPass
 void CreateFunctions(ModuleOp module, OpBuilder &builder, FunctionType fnType, std::string fnName) {
   auto c = builder.create<emitc::FuncOp>(module.getLoc(), fnName, fnType);
   c.setPrivate();
-  c->setAttr("specifiers", builder.getStrArrayAttr({"extern"}));
+
+  c->setAttr("specifiers", builder.getStrArrayAttr({"extern", "\"C\""}));
 }
 
 void HARXToLLVMLoweringPass::runOnOperation() {
