@@ -365,7 +365,17 @@ mlir::LogicalResult RewriteOnnxMaxPoolToArxPattern::matchAndRewrite(ONNXMaxPoolS
     auto ui8_pad_size = rewriter.getIntegerAttr(ui8_type, mlir::cast<IntegerAttr>(pad_size[0]).getInt());
     auto ui8_stride_size = rewriter.getIntegerAttr(ui8_type, mlir::cast<IntegerAttr>(stride[0]).getInt());
     
-    auto maxpool_op = rewriter.create<HARXMaxPoolOp>(op.getLoc(), ui8_result_array, op.getOperand(), ui8_kernel_height, ui8_kernel_width, ui8_pad_size, ui8_stride_size);
+    // auto inputTy = mlir::cast<RankedTensorType>(op.getX().getType());
+    // auto inputShape = inputTy.getShape();
+    // auto inputN = rewriter.getIntegerAttr(ui8_type, inputShape[0]);
+    // auto inputC = rewriter.getIntegerAttr(ui8_type, inputShape[1]);
+    // auto inputH = rewriter.getIntegerAttr(ui8_type, inputShape[2]);
+    // auto inputW = rewriter.getIntegerAttr(ui8_type, inputShape[3]);
+    
+
+    auto maxpool_op = rewriter.create<HARXMaxPoolOp>(op.getLoc(), ui8_result_array, op.getOperand(), 
+                                                            // inputN, inputC, inputH, inputW,
+                                                            ui8_kernel_height, ui8_kernel_width, ui8_pad_size, ui8_stride_size);
     rewriter.replaceOp(op, maxpool_op.getResult());
 
     return mlir::success();
@@ -404,12 +414,12 @@ mlir::LogicalResult RewriteOnnxQConv2DToArxPattern::matchAndRewrite(ONNXQLinearC
         
     auto bias_elem_attr = mlir::cast<DenseIntElementsAttr>(bias_attr);
     auto bias_i8_shape = mlir::cast<ShapedType>(bias_elem_attr.getType());
-    auto bias_ui8_shape = bias_i8_shape.clone(rewriter.getIntegerType(8, false));
+    auto bias_ui8_shape = bias_i8_shape.clone(rewriter.getIntegerType(32, true));
     SmallVector<APInt> bias_ui8;
     bias_ui8.reserve(bias_elem_attr.getNumElements());
     for (auto item : bias_elem_attr.getValues<APInt>()) {
         auto value = item.getSExtValue();
-        bias_ui8.push_back(APInt(8, value + 127, true));
+        bias_ui8.push_back(APInt(32, value + 127, true));
     }
     auto bias_dense_attr = DenseElementsAttr::get(bias_ui8_shape, bias_ui8);
     auto bias_op = rewriter.create<HARXConstantOp>(
@@ -437,20 +447,47 @@ mlir::LogicalResult RewriteOnnxQConv2DToArxPattern::matchAndRewrite(ONNXQLinearC
                            rewriter.getNamedAttr("value", kernel_scale_dense_attr)
                         });
     auto ui8_type = rewriter.getIntegerType(8, false);
+    auto outputOffsetAttr = op.getYZeroPoint().getDefiningOp<ONNXConstantOp>().getValueAttr();
+    auto output_offset = rewriter.getIntegerAttr(ui8_type, mlir::cast<DenseElementsAttr>(outputOffsetAttr).getValues<APInt>()[0].getZExtValue());
     auto do_bias = rewriter.getIntegerAttr(ui8_type, 1);
     auto do_relu = rewriter.getIntegerAttr(ui8_type, 0);
     auto pad_size = rewriter.getIntegerAttr(ui8_type, 2);
     auto stride_size = rewriter.getIntegerAttr(ui8_type, 1);
-
+        
     llvm::dbgs() << "04 RewriteOnnxQConv2DToArxPattern, op : " << op.getX() << "\n";
     // llvm::dbgs() << "04 RewriteOnnxQConv2DToArxPattern, op : " << op.getX().getDefiningOp< << "\n";
+
+    // auto inputTy = mlir::cast<RankedTensorType>(op.getX().getType());
+    // auto kernelTy = mlir::cast<RankedTensorType>(op.getW().getType());
+    // auto outputTy = mlir::cast<RankedTensorType>(op.getResult().getType());
+    // auto inputShape = inputTy.getShape();
+    // auto kernelShape = kernelTy.getShape();
+    // auto outputShape = outputTy.getShape();
+    
+    // auto inputN = rewriter.getIntegerAttr(ui8_type, inputShape[0]);
+    // auto inputC = rewriter.getIntegerAttr(ui8_type, inputShape[1]);
+    // auto inputH = rewriter.getIntegerAttr(ui8_type, inputShape[2]);
+    // auto inputW = rewriter.getIntegerAttr(ui8_type, inputShape[3]);
+    
+    // auto kernelN = rewriter.getIntegerAttr(ui8_type, kernelShape[0]);
+    // auto kernelC = rewriter.getIntegerAttr(ui8_type, kernelShape[1]);
+    // auto kernelH = rewriter.getIntegerAttr(ui8_type, kernelShape[2]);
+    // auto kernelW = rewriter.getIntegerAttr(ui8_type, kernelShape[3]);
+
+    // auto outputN = rewriter.getIntegerAttr(ui8_type, outputShape[0]);
+    // auto outputC = rewriter.getIntegerAttr(ui8_type, outputShape[1]);
+    // auto outputH = rewriter.getIntegerAttr(ui8_type, outputShape[2]);
+    // auto outputW = rewriter.getIntegerAttr(ui8_type, outputShape[3]);
 
     auto conv_op = rewriter.create<HARXConvolutionShiftOp>(op.getLoc(), op.getResult().getType(), 
                                                                 op.getX().getDefiningOp()->getResult(0), 
                                                                 kernel_op, 
                                                                 kernel_scale_op, 
                                                                 bias_op, 
-                                                                do_bias, do_relu, pad_size, stride_size);
+                                                                // inputN, inputC, inputH, inputW,
+                                                                // kernelN, kernelC, kernelH, kernelW,
+                                                                // outputN, outputC, outputH, outputW,
+                                                                output_offset, do_bias, do_relu, pad_size, stride_size);
 
     llvm::dbgs() << "RewriteOnnxQConv2DToArxPattern, conv_op : " << conv_op << "\n";
     

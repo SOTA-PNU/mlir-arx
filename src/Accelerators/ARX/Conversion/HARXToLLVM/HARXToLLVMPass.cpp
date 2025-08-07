@@ -84,11 +84,26 @@ void HARXToLLVMLoweringPass::runOnOperation() {
   ConversionTarget target(getContext());
 
   target.addLegalDialect<mlir::emitc::EmitCDialect>();
+
   // target.addIllegalDialect<harx::HARXDialect>();
-  target.addIllegalOp<harx::HARXQuantizationOp>();
+  target.addIllegalOp<harx::HARXQuantizationOp, 
+                      harx::HARXDequantizationOp, 
+                      harx::HARXConvolutionShiftOp,
+                      harx::HARXMaxPoolOp,
+                      harx::HARXTransposeOp,
+                      harx::HARXMatMulOp>();
+                      
   target.addLegalOp<UnrealizedConversionCastOp>();
   
-  // target.addIllegalOp<func::FuncOp>();
+  target.addDynamicallyLegalOp<func::FuncOp>([](func::FuncOp op) {
+    // The function is legal if it has no arguments.
+    if (op.getName() == "main_graph") { 
+      return false;
+    }else {
+      return true;
+    }
+  });
+
   // target.addDynamicallyLegalOp<func::ReturnOp>([](func::ReturnOp op) {
   //   // The return op is legal if it has no operands.
   //   return op.getNumOperands() == 0;
@@ -117,11 +132,6 @@ void HARXToLLVMLoweringPass::runOnOperation() {
   OpBuilder builder(&ctx);
   builder.setInsertionPointToStart(&module.getBodyRegion().front());
 
-  builder.create<emitc::IncludeOp>(module.getLoc(), "stdint.h", true);
-  builder.create<emitc::IncludeOp>(module.getLoc(), "stdlib.h", true);
-  builder.create<emitc::IncludeOp>(module.getLoc(), "string.h", true);
-  builder.create<emitc::IncludeOp>(module.getLoc(), "stdbool.h", true);
-  
   auto ui8Ty = builder.getIntegerType(8, false);
   auto ui8pTy = mlir::emitc::PointerType::get(ui8Ty);
   auto i32Ty = builder.getIntegerType(32, true);
@@ -131,6 +141,11 @@ void HARXToLLVMLoweringPass::runOnOperation() {
   auto f32Ty = builder.getF32Type();
   auto f32pTy = mlir::emitc::PointerType::get(f32Ty);
 
+  builder.create<emitc::IncludeOp>(module.getLoc(), "stdint.h", true);
+  builder.create<emitc::IncludeOp>(module.getLoc(), "stdlib.h", true);
+  builder.create<emitc::IncludeOp>(module.getLoc(), "string.h", true);
+  builder.create<emitc::IncludeOp>(module.getLoc(), "stdbool.h", true);
+  
   
   CreateFunctions(module, builder,  builder.getFunctionType(
       /*inputs*/  {
@@ -143,9 +158,16 @@ void HARXToLLVMLoweringPass::runOnOperation() {
       },
       /*results*/ {i32Ty}), "convolution_i8_shift");
 
+
+//   int fullyconnected_i8_shift(unsigned char* input, unsigned char *kernel, int *bias, unsigned char *output, unsigned char* outputOffset,
+//                             unsigned int inputDim0, unsigned int inputDim1, unsigned int kernelDim0, unsigned int kernelDim1,
+//                             bool doBias, int* shift, unsigned int outputDim0, unsigned int outputDim1)
+// {
+
+
   CreateFunctions(module, builder, builder.getFunctionType(
     /*inputs*/  {
-      ui8pTy, ui8pTy, i32pTy, ui8pTy, 
+      ui8pTy, ui8pTy, i32pTy, ui8pTy, ui8pTy, 
       ui32Ty, ui32Ty, ui32Ty, ui32Ty,
       i1Ty, i32pTy, ui32Ty,ui32Ty
   },
@@ -286,7 +308,6 @@ void HARXToLLVMLoweringPass::runOnOperation() {
   if (failed(applyPartialConversion(module, target, std::move(patterns))))
     signalPassFailure();
 
-
 // module.walk([&](func::FuncOp fn) {
 //   if (fn.getName() != "main_graph") return;
 
@@ -329,13 +350,6 @@ void HARXToLLVMLoweringPass::runOnOperation() {
 //     entry.getArgument(i).setType(newInputs[i]);  // patch block arg :contentReference[oaicite:3]{index=3}
 //   }
 // });
-
-
-//   module.walk([&](Operation *op) {
-//     llvm::outs() << "Processing operation: " << op->getName() << "\n";
-//     llvm::outs() << "Found operation: " << op->getDialect() << "\n";
-//   });
-
 }
 
 std::unique_ptr<Pass> createHARXToLLVMPass() {
