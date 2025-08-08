@@ -57,10 +57,6 @@ build:
     - export PATH=$PATH:/builds/ones-ai/mlir-arx/build/Release/bin
   script:
     - ls
-    - rm -rf /builds/ones-ai/mlir-arx/third_party/*
-    - git fetch origin
-    - git checkout origin/chacha/arx
-    - git submodule update --init --recursive
     - cmake -G Ninja -DCMAKE_CXX_COMPILER=/usr/bin/c++ \
         -DCMAKE_BUILD_TYPE=Release \
         -DLLVM_ENABLE_ASSERTIONS=OFF \
@@ -68,6 +64,8 @@ build:
         -DLLVM_DIR=/workdir/llvm-project/build/lib/cmake/llvm \
         -DONNX_MLIR_ACCELERATORS=${ACCEL} ..
     - cmake --build .
+    - cmake --build onnx-mlir-opt
+
     - cd /builds/ones-ai/mlir-arx/test/mlir-arx
     - python3 run.py
     # - cmake --build . --target onnx-mlir
