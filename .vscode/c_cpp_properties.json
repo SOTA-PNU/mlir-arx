@@ -1,0 +1,30 @@
+{
+    "configurations": [
+        {
+            "name": "LLVM",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/workdir/llvm-project/llvm/include",
+                "/workdir/llvm-project/mlir/include",
+                "/workdir/mlir-arx/include",
+                "/workdir/mlir-arx/build/third_party/onnx",
+                "/workdir/mlir-arx/third_party/onnx",
+                "/workdir/llvm-project/build/tools/mlir/include",
+                "/workdir/llvm-project/build/include/llvm",
+                "/workdir/llvm-project/build/include",
+                "/workdir/mlir-arx",
+                "/workdir/mlir-arx/build"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/clang++-18",
+            "cStandard": "c17",
+            "cppStandard": "c++14",
+            "intelliSenseMode": "linux-clang-x64",
+            "compileCommands": [
+                "${workspaceFolder}/build/compile_commands.json"
+            ],
+            "configurationProvider": "ms-vscode.cmake-tools"
+        }
+    ],
+    "version": 4
+}

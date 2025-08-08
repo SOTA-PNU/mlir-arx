@@ -25,7 +25,8 @@
 #include "src/Accelerators/Accelerators.inc"
 
 // TODO: Remove NNPA from this header
-#include "src/Accelerators/NNPA/Compiler/NNPACompilerOptions.hpp"
+// #include "src/Accelerators/NNPA/Compiler/NNPACompilerOptions.hpp"
+#include "src/Accelerators/ARX/Compiler/ARXCompilerOptions.hpp"
 
 // Define the macros used to generate various accelerators artifacts (via the
 // use of the APPLY_TO_ACCELERATORS macro, which is defined in the cmake
