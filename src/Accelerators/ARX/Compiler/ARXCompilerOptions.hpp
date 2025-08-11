@@ -39,9 +39,9 @@
 namespace onnx_mlir {
 
 typedef enum {
-  EmitANONE,
-  EmitHARXIR,
-  EmitLARXIR,
+  EmitNONE,
+  EmitARXIR,
+  EmitEmitCIR,
 } ARXEmissionTargetType;
 
 // typedef enum {
@@ -53,7 +53,9 @@ typedef enum {
 
 extern llvm::cl::OptionCategory OnnxMlirOptions;
 extern llvm::cl::OptionCategory OnnxMlirCommonOptions;
-extern llvm::cl::opt<bool> arxEnableCuteChaCha;
+extern std::string outputBaseName;
+extern llvm::cl::opt<ARXEmissionTargetType> arxEmissionTarget;
+
 }
 
 #endif

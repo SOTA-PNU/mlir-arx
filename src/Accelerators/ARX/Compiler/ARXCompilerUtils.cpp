@@ -48,17 +48,26 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Conversion/LLVMCommon/LoweringOptions.h"
 #include "mlir/Dialect/Bufferization/Transforms/OneShotAnalysis.h"
+#include "mlir/Target/Cpp/CppEmitter.h"
 
 #define DEBUG_TYPE "ARXCompilerUtils"
+
+#include <fstream>
+
 
 using namespace mlir;
 using namespace onnx_mlir;
 
+extern std::string outputBaseName;
+
+
 namespace onnx_mlir {
+
+  extern llvm::cl::opt<ARXEmissionTargetType> arxEmissionTarget;
+
 void addPassesARX(mlir::OwningOpRef<mlir::ModuleOp> &module,
   mlir::PassManager &pm, EmissionTargetType &emissionTarget,
   std::string outputNameNoExt) {
-  llvm::outs() << "CHACHA! " << arxEnableCuteChaCha << " \n";
 
   llvm::outs() << "configurePasses\n";
   configurePasses();
@@ -66,38 +75,28 @@ void addPassesARX(mlir::OwningOpRef<mlir::ModuleOp> &module,
   llvm::outs() << "addONNXToMLIRPasses\n";
   addONNXToMLIRPasses(pm, /*target CPU*/ maccel.empty());
 
-  // for (unsigned i = 0; i < 3; i++) {
-    // pm.addPass(onnx_mlir::createRewriteONNXForHARXPass());
-    // pm.addPass(onnx_mlir::createSimplifyShapeRelatedOpsPass());
-  // }
-  pm.addNestedPass<func::FuncOp>(onnx_mlir::createShapeInferencePass());
-  pm.addPass(mlir::createCanonicalizerPass());
-  pm.addPass(onnx_mlir::createONNXToHARXPass());
-  pm.addPass(mlir::createCanonicalizerPass());
+  // onnx-mlir -o 01_mnist -EmitONNXIR ./mnist-12-int8.onnx
+  // onnx-mlir-opt -o 01_mnist.harx.mlir -maccel=ARX --canonicalize --convert-onnx-to-harx --canonicalize  ./01_mnist.onnx.mlir
+  // onnx-mlir-opt -o 01_mnist.emitc.mlir -maccel=ARX --canonicalize --convert-harx-to-emitc -reconcile-unrealized-casts --canonicalize 01_mnist.harx.mlir
+// emissionTarget >= EmitMLIR
+  if (arxEmissionTarget >= EmitARXIR) {
+    pm.addNestedPass<func::FuncOp>(onnx_mlir::createShapeInferencePass());
+    pm.addPass(mlir::createCanonicalizerPass());
+    pm.addPass(onnx_mlir::createONNXToHARXPass());
+    pm.addPass(mlir::createCanonicalizerPass());
+  } 
 
-  // mlir::bufferization::OneShotBufferizationOptions opttions;
-  // opttions.allowUnknownOps = true;
-  // opttions.bufferizeFunctionBoundaries = true;
-  // pm.addPass(mlir::bufferization::createOneShotBufferizePass(opttions));
-  // pm.addPass(onnx_mlir::createHARXToLLVMPass());
-  // pm.addPass(mlir::createCanonicalizerPass());
+  if (arxEmissionTarget >= EmitEmitCIR) {
+    pm.addPass(onnx_mlir::createHARXToLLVMPass());
+    pm.addPass(mlir::createCanonicalizerPass());
+  }
+  pm.addPass(mlir::createReconcileUnrealizedCastsPass());
   
-  // pm.addPass(mlir::bufferization::createOneShotBufferizePass(opttions));
-  // pm.addPass(memref::createExpandStridedMetadataPass()); 
-  // pm.addPass(mlir::bufferization::createFinalizingBufferizePass());
-  // pm.addNestedPass<mlir::func::FuncOp>(mlir::memref::createNormalizeMemRefsPass());
-  
-  // pm.addPass(mlir::createConvertArithToEmitC());
-  // pm.addPass(mlir::createConvertMemRefToEmitC());
-  // pm.addPass(mlir::createConvertFuncToEmitC());
-
-  // pm.addPass(mlir::createArithToLLVMConversionPass());
-  // pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
-  // mlir::ConvertFuncToLLVMPassOptions func_option;
-  // func_option.useBarePtrCallConv = true;
-  // pm.addPass(mlir::createConvertFuncToLLVMPass(func_option));
-
-  // pm.addPass(mlir::createReconcileUnrealizedCastsPass());
+  // mlir::emitc::translateToCpp(module.get(), raw_output_stream);
+  // llvm::LLVMContext llvmContext;
+  // mlir::registerBuiltinDialectTranslation(*(module.get().getContext()));
+  // mlir::registerLLVMDialectTranslation(*(module.get().getContext()));
+  // std::unique_ptr<llvm::Module> llvmModule = mlir::translateModuleToLLVMIR(*module, llvmContext);
 }
 
 } // namespace onnx_mlir
