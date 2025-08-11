@@ -80,6 +80,7 @@ for fail in fail_list:
     print(f"\tFailed test: {fail}")
 
 if error_test > 0:
+    raise Exception("Some tests failed. Please check the output above.")
     os._exit(1)
 else:
     os._exit(0)  # Exit the script cleanly
