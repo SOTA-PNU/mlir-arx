@@ -64,7 +64,6 @@ build:
         - src/
         - include/
         - third_party/
-        
   artifacts:
     paths:
       - artifacts/
@@ -109,7 +108,18 @@ unit-test:
       optional: true
 
   before_script:
-    - apt update && apt-get install -y libprotobuf-dev python3.12
+    - apt update && apt-get install -y libprotobuf-dev python3.12 zip
+    - > 
+      set -e
+      if [ -d artifacts ]; then
+        echo "[test] got artifacts from current pipeline"
+      else
+        echo "[test] try to fetch last successful artifacts for this ref"
+        curl --fail -L \
+          --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/jobs/artifacts/$CI_COMMIT_REF_NAME/download?job=build" \
+          -o artifacts.zip && unzip artifacts.zip || true
+      fi
     - export PATH=${CI_PROJECT_DIR}/artifacts:$PATH
   script:
     - cd "test/mlir-arx"
