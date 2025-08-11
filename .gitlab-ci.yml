@@ -67,15 +67,7 @@ build:
     - ls -la /workdir/llvm-project/build/lib/cmake/llvm/ || echo "LLVM cmake dir not found"
     - ls -la /workdir/llvm-project/build/bin/ || echo "LLVM build bin dir not found"
     - /workdir/llvm-project/build/bin/clang++ --version || echo "clang++ version check failed"
-    - cmake -G Ninja \
-        -DLLVM_DIR=/workdir/llvm-project/build/lib/cmake/llvm \
-        -DCMAKE_CXX_COMPILER=/workdir/llvm-project/build/bin/clang++ \
-        -DCMAKE_C_COMPILER=/workdir/llvm-project/build/bin/clang-20 \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DLLVM_ENABLE_ASSERTIONS=OFF \
-        -DMLIR_DIR=/workdir/llvm-project/build/lib/cmake/mlir \
-        -DONNX_MLIR_ACCELERATORS=${ACCEL} \
-        -DCMAKE_LIBRARY_PATH=/workdir/llvm-project/build/lib ..
+    - cmake -G Ninja -DLLVM_DIR=/workdir/llvm-project/build/lib/cmake/llvm -DCMAKE_CXX_COMPILER=/workdir/llvm-project/build/bin/clang++ -DCMAKE_C_COMPILER=/workdir/llvm-project/build/bin/clang-20 -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DMLIR_DIR=/workdir/llvm-project/build/lib/cmake/mlir -DONNX_MLIR_ACCELERATORS=${ACCEL} -DCMAKE_LIBRARY_PATH=/workdir/llvm-project/build/lib ..
     - cmake --build .
     - export PATH=$PATH:/builds/ones-ai/mlir-arx/build/Release/bin
     - cd /builds/ones-ai/mlir-arx/test/mlir-arx
