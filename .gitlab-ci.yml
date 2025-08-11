@@ -109,7 +109,7 @@ unit-test:
 
   before_script:
     - apt update && apt-get install -y libprotobuf-dev python3.12 zip
-    - > 
+    - |
       set -e
       if [ -d artifacts ]; then
         echo "[test] got artifacts from current pipeline"
