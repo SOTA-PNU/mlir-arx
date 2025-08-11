@@ -54,7 +54,6 @@ build:
           echo "Artifacts directory already exists.";
           exit 0;
         fi
-    - mkdir artifacts
     - >
       cmake -G Ninja -DLLVM_DIR=/build/lib/cmake/llvm 
       -DCMAKE_CXX_COMPILER=${LLVM_PROJECT_ROOT}/build/bin/clang++ 
@@ -65,6 +64,7 @@ build:
       -DCMAKE_LIBRARY_PATH=${LLVM_PROJECT_ROOT}/build/lib ..
     - cmake --build .
     - cd ${CI_PROJECT_DIR}
+    - mkdir artifacts
     - cp build/Debug/bin/onnx-mlir artifacts/
     - cp build/Debug/bin/onnx-mlir-opt artifacts/
     - cp /workdir/llvm-project/build/bin/mlir-translate artifacts/
