@@ -72,22 +72,23 @@ ENV PATH=$PATH:/workdir/onnx-mlir/build/Debug/bin/:/workdir/onnx-mlir/build/Debu
 
 RUN apt-get update && apt-get install -y openssh-server git && \
     mkdir /var/run/sshd && \
-    echo 'root:root' | chpasswd && \
-    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    sed -i 's/#PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config && \
+    passwd -d root
 
-RUN ACCEL=ARX NPROC=80 WORKDIR=/workdir LLVM_PROJECT_ROOT=${WORKDIR}/llvm-project \
-    cd ${WORKDIR} && \
-    git clone --recursive https://gitlab.com/ones-ai/mlir-arx -b chacha/mlir-arx && \
-    cd mlir-arx && \
-    mkdir build && \
-    cd build && \
-    cmake -G Ninja -DCMAKE_CXX_COMPILER=/usr/bin/clang++-18 \
-                -DCMAKE_C_COMPILER=/usr/bin/clang-18 \
-                -DCMAKE_BUILD_TYPE=Debug \
-                -DLLVM_ENABLE_ASSERTIONS=OFF \
-                -DMLIR_DIR=${LLVM_PROJECT_ROOT}/build/lib/cmake/mlir  \
-                -DONNX_MLIR_ACCELERATORS=${ACCEL} \
-                ..  && \
-    cmake --build .
+# RUN ACCEL=ARX NPROC=80 WORKDIR=/workdir LLVM_PROJECT_ROOT=${WORKDIR}/llvm-project \
+#     cd ${WORKDIR} && \
+#     git clone --recursive https://gitlab.com/ones-ai/mlir-arx -b chacha/mlir-arx && \
+#     cd mlir-arx && \
+#     mkdir build && \
+#     cd build && \
+#     cmake -G Ninja -DCMAKE_CXX_COMPILER=/usr/bin/clang++-18 \
+#                 -DCMAKE_C_COMPILER=/usr/bin/clang-18 \
+#                 -DCMAKE_BUILD_TYPE=Debug \
+#                 -DLLVM_ENABLE_ASSERTIONS=OFF \
+#                 -DMLIR_DIR=${LLVM_PROJECT_ROOT}/build/lib/cmake/mlir  \
+#                 -DONNX_MLIR_ACCELERATORS=${ACCEL} \
+#                 ..  && \
+#     cmake --build .
 
 CMD ["/usr/sbin/sshd", "-D"]
