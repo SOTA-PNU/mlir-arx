@@ -99,6 +99,8 @@ unit-test:
   needs:
     - job: build
       artifacts: true
+      optional: true
+
   before_script:
     - apt update && apt-get install -y libprotobuf-dev python3.12
     - export PATH=${CI_PROJECT_DIR}/artifacts:$PATH
