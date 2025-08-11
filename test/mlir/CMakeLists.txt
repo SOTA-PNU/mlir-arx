@@ -4,8 +4,7 @@
 # accelerator code itself cannot be built.
 if (ONNX_MLIR_ACCELERATORS)
   foreach(t ${ONNX_MLIR_ACCELERATORS})
-    string(TOUPPER ${t} T)
-    set(${T}_LIT_ENABLED 1)
+    set(${t}_LIT_ENABLED 1)
     list(APPEND ACCEL_LIT_LIST "${t}")
   endforeach(t)
 endif(ONNX_MLIR_ACCELERATORS)

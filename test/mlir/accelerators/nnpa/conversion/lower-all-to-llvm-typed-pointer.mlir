@@ -1,4 +1,4 @@
-// RUN: onnx-mlir-opt --march=z16 --maccel=NNPA --convert-krnl-to-llvm %s -split-input-file | FileCheck %s
+// RUN: onnx-mlir-opt --mcpu=z16 --maccel=NNPA --convert-krnl-to-llvm %s -split-input-file | FileCheck %s
 
 // -----
 
@@ -6,7 +6,7 @@ func.func @test_lower_both_zlow_and_krnl() -> () {
   %0 = memref.alloc() : memref<10x10xf32>
   %1 = memref.alloc() : memref<1x1x32x64xf16>
   %2 = "krnl.global"() {name = "constant_0", shape = [1, 2], value = dense<[[0., 1.0]]> : tensor<1x2xf32>} : () -> memref<1x2xf32>
-  "zlow.stick"(%0, %1) {no_saturation = -1 : si64} : (memref<10x10xf32>, memref<1x1x32x64xf16>) -> ()
+  "zlow.stick"(%0, %1) : (memref<10x10xf32>, memref<1x1x32x64xf16>) -> ()
   return
 
   // CHECK-DAG: llvm.mlir.global internal constant @{{.*}}(dense<{{\[}}[0.000000e+00, 1.000000e+00]{{\]}}> : tensor<1x2xf32>) {addr_space = 0 : i32, alignment = 16 : i64} : !llvm.array<1 x array<2 x f32>>
@@ -18,7 +18,7 @@ func.func @test_lower_both_zlow_and_krnl() -> () {
 func.func @test_stick() -> () {
   %0 = memref.alloc() : memref<10x10xf32>
   %1 = memref.alloc() : memref<1x1x32x64xf16>
-  "zlow.stick"(%0, %1) {no_saturation = -1 : si64} : (memref<10x10xf32>, memref<1x1x32x64xf16>) -> ()
+  "zlow.stick"(%0, %1) : (memref<10x10xf32>, memref<1x1x32x64xf16>) -> ()
   return
 
   // CHECK-LABEL: test_stick
@@ -39,20 +39,19 @@ func.func @test_stick() -> () {
   // CHECK: [[TRANSFORMED_DESC_I8PTR:%.+]] = llvm.bitcast [[TRANSFORMED_DESC]] : !llvm.ptr to !llvm.ptr
   // CHECK: {{.*}} = llvm.call @zdnn_generate_transformed_desc([[PRE_TRANSFORMED_DESC_I8PTR]], [[TRANSFORMED_DESC_I8PTR]]) : (!llvm.ptr, !llvm.ptr) -> i32
 
-  // CHECK: [[ZTENSOR:%.+]] = llvm.alloca {{.*}} x !llvm.struct<(ptr, ptr, i64, ptr, i1, array<3 x i8>, f32, f32, array<20 x i8>)> : (i64) -> !llvm.ptr
+  // CHECK: [[ZTENSOR:%.+]] = llvm.alloca {{.*}} x !llvm.struct<(ptr, ptr, i64, ptr, i1, array<31 x i8>)> : (i64) -> !llvm.ptr
   // CHECK: [[TRANSFORMED_DESC_I8PTR:%.+]] = llvm.bitcast [[TRANSFORMED_DESC]] : !llvm.ptr to !llvm.ptr
   // CHECK: [[BUFFER_SIZE:%.+]] = llvm.call @zdnn_getsize_ztensor([[TRANSFORMED_DESC_I8PTR]]) : (!llvm.ptr) -> i64
-  // CHECK: [[ZTENSOR_PRE_TRANSFORMED_DESC:%.+]] = llvm.getelementptr [[ZTENSOR]]{{\[}}0, 0] : (!llvm.ptr) -> !llvm.ptr, !llvm.struct<(ptr, ptr, i64, ptr, i1, array<3 x i8>, f32, f32, array<20 x i8>)>
-
+  // CHECK: [[ZTENSOR_PRE_TRANSFORMED_DESC:%.+]] = llvm.getelementptr [[ZTENSOR]]{{\[}}0, 0] : (!llvm.ptr) -> !llvm.ptr, !llvm.struct<(ptr, ptr, i64, ptr, i1, array<31 x i8>)>
   // CHECK: llvm.store [[PRE_TRANSFORMED_DESC]], [[ZTENSOR_PRE_TRANSFORMED_DESC]] : !llvm.ptr, !llvm.ptr
 
-  // CHECK: [[ZTENSOR_TRANSFORMED_DESC:%.+]] = llvm.getelementptr [[ZTENSOR]]{{\[}}0, 1] : (!llvm.ptr) -> !llvm.ptr, !llvm.struct<(ptr, ptr, i64, ptr, i1, array<3 x i8>, f32, f32, array<20 x i8>)>
+  // CHECK: [[ZTENSOR_TRANSFORMED_DESC:%.+]] = llvm.getelementptr [[ZTENSOR]]{{\[}}0, 1] : (!llvm.ptr) -> !llvm.ptr, !llvm.struct<(ptr, ptr, i64, ptr, i1, array<31 x i8>)>
   // CHECK: llvm.store [[TRANSFORMED_DESC]], [[ZTENSOR_TRANSFORMED_DESC]] : !llvm.ptr, !llvm.ptr
 
-  // CHECK: [[ZTENSOR_BUFFER_SIZE:%.+]] = llvm.getelementptr [[ZTENSOR]]{{\[}}0, 2] : (!llvm.ptr) -> !llvm.ptr, !llvm.struct<(ptr, ptr, i64, ptr, i1, array<3 x i8>, f32, f32, array<20 x i8>)>
+  // CHECK: [[ZTENSOR_BUFFER_SIZE:%.+]] = llvm.getelementptr [[ZTENSOR]]{{\[}}0, 2] : (!llvm.ptr) -> !llvm.ptr, !llvm.struct<(ptr, ptr, i64, ptr, i1, array<31 x i8>)>
   // CHECK: llvm.store [[BUFFER_SIZE]], [[ZTENSOR_BUFFER_SIZE]] : i64, !llvm.ptr
 
-  // CHECK: [[ZTENSOR_BUFFER:%.+]] = llvm.getelementptr [[ZTENSOR]]{{\[}}0, 3] : (!llvm.ptr) -> !llvm.ptr, !llvm.struct<(ptr, ptr, i64, ptr, i1, array<3 x i8>, f32, f32, array<20 x i8>)>
+  // CHECK: [[ZTENSOR_BUFFER:%.+]] = llvm.getelementptr [[ZTENSOR]]{{\[}}0, 3] : (!llvm.ptr) -> !llvm.ptr, !llvm.struct<(ptr, ptr, i64, ptr, i1, array<31 x i8>)>
   // CHECK: llvm.store [[ALIGNED_BUFFER_I8PTR]], [[ZTENSOR_BUFFER]] : !llvm.ptr, !llvm.ptr
 
   // CHECK: [[FALSE:%.+]] = llvm.mlir.constant(false) : i1
@@ -94,7 +93,7 @@ func.func @test_unstick() -> () {
   // CHECK: [[TRANSFORMED_DESC_I8PTR:%.+]] = llvm.bitcast [[TRANSFORMED_DESC]] : !llvm.ptr to !llvm.ptr
   // CHECK: {{.*}} = llvm.call @zdnn_generate_transformed_desc([[PRE_TRANSFORMED_DESC_I8PTR]], [[TRANSFORMED_DESC_I8PTR]]) : (!llvm.ptr, !llvm.ptr) -> i32
 
-  // CHECK: [[ZTENSOR:%.+]] = llvm.alloca {{.*}} x !llvm.struct<(ptr, ptr, i64, ptr, i1, array<3 x i8>, f32, f32, array<20 x i8>)> : (i64) -> !llvm.ptr
+  // CHECK: [[ZTENSOR:%.+]] = llvm.alloca {{.*}} x !llvm.struct<(ptr, ptr, i64, ptr, i1, array<31 x i8>)> : (i64) -> !llvm.ptr
   // CHECK: [[TRANSFORMED_DESC_I8PTR:%.+]] = llvm.bitcast [[TRANSFORMED_DESC]] : !llvm.ptr to !llvm.ptr
   // CHECK: [[BUFFER_SIZE:%.+]] = llvm.call @zdnn_getsize_ztensor([[TRANSFORMED_DESC_I8PTR]]) : (!llvm.ptr) -> i64
   // CHECK: [[ZTENSOR_PRE_TRANSFORMED_DESC:%.+]] = llvm.getelementptr [[ZTENSOR]]{{\[}}0, 0] : (!llvm.ptr) -> !llvm.ptr
@@ -335,7 +334,7 @@ func.func @test_call_zdnn_log() -> () {
 // Check whether the lowering of zlow.matmul calls the correct zDNN API or not.
 func.func @test_matmul_no_bcast_unstacked(%x: memref<2048xf16>,%y: memref<2048xf16>,%bias: memref<2048xf16>, %shape: memref<3xi64>) -> memref<2048xf16> {
   %res = memref.alloc() {alignment = 4096 : i64} : memref<2048xf16> 
-  "zlow.matmul"(%x, %y, %bias, %shape, %res) {is_bcast1 = 0 : si64, is_bcast23 = 0 : si64, is_stacked = 0 : si64} : (memref<2048xf16>, memref<2048xf16>, memref<2048xf16>, memref<3xi64>, memref<2048xf16>) -> ()
+  "zlow.matmul"(%x, %y, %bias, %shape, %res) {is_bcast = 0 : si64, is_stacked = 0 : si64} : (memref<2048xf16>, memref<2048xf16>, memref<2048xf16>, memref<3xi64>, memref<2048xf16>) -> ()
   return %res : memref<2048xf16>
   // CHECK-LABEL: test_matmul_no_bcast_unstacked
   // CHECK: %{{.*}} = llvm.call @zdnn_matmul_op_ext(%{{.*}}, %{{.*}}, %{{.*}}, %{{.*}}, %{{.*}}) : (!llvm.ptr, !llvm.ptr, !llvm.ptr, i64, !llvm.ptr) -> i32
@@ -346,7 +345,7 @@ func.func @test_matmul_no_bcast_unstacked(%x: memref<2048xf16>,%y: memref<2048xf
 // Check whether the lowering of zlow.matmul calls the correct zDNN API or not.
 func.func @test_matmul_no_bcast_stacked(%x: memref<2048xf16>,%y: memref<2048xf16>,%bias: memref<2048xf16>, %shape: memref<3xi64>) -> memref<2048xf16> {
   %res = memref.alloc() {alignment = 4096 : i64} : memref<2048xf16> 
-  "zlow.matmul"(%x, %y, %bias, %shape, %res) {is_bcast1 = 0 : si64, is_bcast23 = 0 : si64, is_stacked = -1 : si64} : (memref<2048xf16>, memref<2048xf16>, memref<2048xf16>, memref<3xi64>, memref<2048xf16>) -> ()
+  "zlow.matmul"(%x, %y, %bias, %shape, %res) {is_bcast = 0 : si64, is_stacked = -1 : si64} : (memref<2048xf16>, memref<2048xf16>, memref<2048xf16>, memref<3xi64>, memref<2048xf16>) -> ()
   return %res : memref<2048xf16>
   // CHECK-LABEL: test_matmul_no_bcast_stacked
   // CHECK: %{{.*}} = llvm.call @zdnn_matmul_op_ext(%{{.*}}, %{{.*}}, %{{.*}}, %{{.*}}) : (!llvm.ptr, !llvm.ptr, !llvm.ptr, i64, !llvm.ptr) -> i32
@@ -357,7 +356,7 @@ func.func @test_matmul_no_bcast_stacked(%x: memref<2048xf16>,%y: memref<2048xf16
 // Check whether the lowering of zlow.matmul calls the correct zDNN API or not.
 func.func @test_matmul_bcast_stacked(%x: memref<2048xf16>,%y: memref<2048xf16>,%bias: memref<2048xf16>, %shape: memref<3xi64>) -> memref<2048xf16> {
   %res = memref.alloc() {alignment = 4096 : i64} : memref<2048xf16> 
-  "zlow.matmul"(%x, %y, %bias, %shape, %res) {is_bcast1 = 0 : si64, is_bcast23 = -1 : si64, is_stacked = -1 : si64} : (memref<2048xf16>, memref<2048xf16>, memref<2048xf16>, memref<3xi64>, memref<2048xf16>) -> ()
+  "zlow.matmul"(%x, %y, %bias, %shape, %res) {is_bcast = -1 : si64, is_stacked = -1 : si64} : (memref<2048xf16>, memref<2048xf16>, memref<2048xf16>, memref<3xi64>, memref<2048xf16>) -> ()
   return %res : memref<2048xf16>
   // CHECK-LABEL: test_matmul_bcast_stacked
   // CHECK: %{{.*}} = llvm.call @zdnn_matmul_bcast_op_ext(%{{.*}}, %{{.*}}, %{{.*}}, %{{.*}}) : (!llvm.ptr, !llvm.ptr, !llvm.ptr, i64, !llvm.ptr) -> i32
@@ -368,7 +367,7 @@ func.func @test_matmul_bcast_stacked(%x: memref<2048xf16>,%y: memref<2048xf16>,%
 // Check whether the lowering of zlow.matmul calls the correct zDNN API or not.
 func.func @test_matmul_bcast_unstacked(%x: memref<2048xf16>,%y: memref<2048xf16>,%bias: memref<2048xf16>, %shape: memref<3xi64>) -> memref<2048xf16> {
   %res = memref.alloc() {alignment = 4096 : i64} : memref<2048xf16> 
-  "zlow.matmul"(%x, %y, %bias, %shape, %res) {is_bcast1 = 0 : si64, is_bcast23 = -1 : si64, is_stacked = 0 : si64} : (memref<2048xf16>, memref<2048xf16>, memref<2048xf16>, memref<3xi64>, memref<2048xf16>) -> ()
+  "zlow.matmul"(%x, %y, %bias, %shape, %res) {is_bcast = -1 : si64, is_stacked = 0 : si64} : (memref<2048xf16>, memref<2048xf16>, memref<2048xf16>, memref<3xi64>, memref<2048xf16>) -> ()
   return %res : memref<2048xf16>
   // CHECK-LABEL: test_matmul_bcast_unstacked
   // CHECK: %{{.*}} = llvm.call @zdnn_matmul_bcast_op_ext(%{{.*}}, %{{.*}}, %{{.*}}, %{{.*}}, %{{.*}}) : (!llvm.ptr, !llvm.ptr, !llvm.ptr, i64, !llvm.ptr) -> i32

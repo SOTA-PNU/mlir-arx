@@ -1,10 +1,8 @@
 
 # SPDX-License-Identifier: Apache-2.0
 
-if (NOT ONNX_MLIR_ENABLE_PYRUNTIME_LIGHT)
 add_subdirectory(jni)
 add_subdirectory(omp)
-endif()
 add_subdirectory(python)
 
 # TODO: should add for each accelerator its subdirectory that implements InitAccel##name
@@ -19,7 +17,6 @@ add_onnx_mlir_library(cruntime STATIC
   OMIndexLookup.c
   OMInstrument.c
   OMRandomNormal.c
-  OMRandomUniform.c
   OMResize.c
   OMSort.c
   OMTensor.c
@@ -47,7 +44,6 @@ add_onnx_mlir_library(OMTensorUtils
   OMIndexLookup.cpp
   OMInstrument.cpp
   OMRandomNormal.cpp
-  OMRandomUniform.cpp
   OMResize.cpp
   OMSort.cpp
   OMTensor.cpp
@@ -69,17 +65,6 @@ set_target_properties(OMTensorUtils
   POSITION_INDEPENDENT_CODE TRUE
   )
 
-if (ONNX_MLIR_ENABLE_PYRUNTIME_LIGHT)
-add_compile_definitions(ENABLE_PYRUNTIME_LIGHT)
-add_onnx_mlir_library(OMExecutionSession
-  ExecutionSession.cpp
-
-  EXCLUDE_FROM_OM_LIBS
-
-  LINK_LIBS PUBLIC
-  OMTensorUtils
-  )
-else()
 add_onnx_mlir_library(OMExecutionSession
   ExecutionSession.cpp
 
@@ -89,7 +74,6 @@ add_onnx_mlir_library(OMExecutionSession
   OMTensorUtils
   LLVMSupport
   )
-endif()
 set_target_properties(OMExecutionSession
   PROPERTIES
   POSITION_INDEPENDENT_CODE TRUE

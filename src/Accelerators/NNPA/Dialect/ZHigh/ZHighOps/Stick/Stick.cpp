@@ -12,10 +12,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "src/Accelerators/NNPA/Dialect/ZHigh/ZHighOps/ShapeHelper.hpp"
-#include "src/Accelerators/NNPA/Support/NNPALimit.hpp"
-#include "src/Compiler/CompilerOptions.hpp"
-#include "src/Dialect/ONNX/DialectBuilder.hpp"
-#include "src/Dialect/ONNX/ONNXOps/OpHelper.hpp"
 
 using namespace mlir;
 using namespace onnx_mlir;
@@ -33,7 +29,7 @@ namespace zhigh {
 //===----------------------------------------------------------------------===//
 
 void ZHighStickOp::build(OpBuilder &builder, OperationState &state, Value input,
-    StringAttr layout, IntegerAttr noSaturation) {
+    StringAttr layout, IntegerAttr saturation) {
   Type resType = builder.getNoneType();
   Type resElementType = builder.getF16Type();
   if (!mlir::isa<NoneType>(input.getType())) {
@@ -67,7 +63,7 @@ void ZHighStickOp::build(OpBuilder &builder, OperationState &state, Value input,
       resType = UnrankedTensorType::get(resElementType);
     }
   }
-  build(builder, state, resType, input, layout, noSaturation);
+  build(builder, state, resType, input, layout, saturation);
 }
 
 //===----------------------------------------------------------------------===//
@@ -141,14 +137,11 @@ void ZHighStickOp::getCanonicalizationPatterns(
   results.insert<NoneTypeStickRemovalPattern>(context);
   results.insert<StickUnstickSameLayoutRemovalPattern>(context);
   results.insert<StickUnstickDiffLayoutRemovalPattern>(context);
-  results.insert<Stick3DSSqueezeUnstick4DSPattern>(context);
   results.insert<ReplaceONNXLeakyReluPattern>(context);
   results.insert<ReplaceONNXSoftplusPattern>(context);
   results.insert<ReplaceONNXReciprocalSqrtPattern>(context);
   results.insert<ReshapeTransposeReshape2DTo3DSPattern>(context);
   results.insert<ReshapeTransposeReshape3DSTo2DPattern>(context);
-  results.insert<ReshapeTransposeReshapeRoberta3DSWPattern1>(context);
-  results.insert<ReshapeTransposeReshapeRoberta3DSWPattern2>(context);
 }
 
 } // namespace zhigh

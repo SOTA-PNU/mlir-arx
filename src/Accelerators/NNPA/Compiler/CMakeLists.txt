@@ -19,7 +19,6 @@ add_onnx_mlir_library(OMNNPACompilerOptions
 
 add_onnx_mlir_library(OMNNPACompilerUtils
   NNPACompilerUtils.cpp
-  ZHighDisposableGarbageCollector.cpp
 
   EXCLUDE_FROM_OM_LIBS
 

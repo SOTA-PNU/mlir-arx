@@ -6,7 +6,6 @@ add_onnx_mlir_library(OMZLowToLLVM
   libzdnn
 
   LINK_LIBS PUBLIC
-  OMCompilerOptions
   MLIRLLVMCommonConversion
   OMKrnlToLLVM
   OMLayoutHelper

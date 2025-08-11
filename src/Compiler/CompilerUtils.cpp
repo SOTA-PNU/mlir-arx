@@ -60,9 +60,9 @@ mlir::TimingScope rootTimingScope;
 namespace onnx_mlir {
 
 // Values to report the current phase of compilation.
+// Increase TOTAL_COMPILE_PHASE when having more phases.
 uint64_t CURRENT_COMPILE_PHASE = 1;
-uint64_t TOTAL_COMPILE_PHASE = 0;
-static DiagnosticEngine::HandlerID diagnosticHandlerID = 0;
+uint64_t TOTAL_COMPILE_PHASE = 6;
 
 // Make a function that forces preserving all files using the runtime arguments
 // and/or the overridePreserveFiles enum.
@@ -421,12 +421,6 @@ static int genLLVMBitcode(const mlir::OwningOpRef<ModuleOp> &module,
     return InvalidTemporaryFileAccess;
   }
 
-  // In the LLVM translation, we get some warnings, so disable in non-verbose
-  // mode.
-  if (diagnosticHandlerID && !VerboseOutput) {
-    module.get().getContext()->getDiagEngine().eraseHandler(
-        diagnosticHandlerID);
-  }
   llvm::LLVMContext llvmContext;
   mlir::registerBuiltinDialectTranslation(*(module.get().getContext()));
   mlir::registerLLVMDialectTranslation(*(module.get().getContext()));
@@ -467,8 +461,8 @@ static int genLLVMBitcode(const mlir::OwningOpRef<ModuleOp> &module,
                .appendStr(getOptimizationLevelUniqueOption(
                    {getLLVMOptions(), getXoptOption()}))
                .appendStr(getTargetTripleOption())
-               .appendStr(getTargetArchOption(/*forLLVM toolchain*/ true))
-               .appendStr(getTargetCPUOption(/*forLLVM*/ true))
+               .appendStr(getTargetArchOption())
+               .appendStr(getTargetCPUOption())
                .appendList(getXoptOption())
                .appendList(getLLVMOptions())
                .appendList({"-o", optimizedBitcodeNameWithExt})
@@ -491,8 +485,8 @@ static int genModelObject(
                .appendStr(getOptimizationLevelUniqueOption(
                    {getLLVMOptions(), getXllcOption()}))
                .appendStr(getTargetTripleOption())
-               .appendStr(getTargetArchOption(/*LLVM toolchain*/ true))
-               .appendStr(getTargetCPUOption(/*LLVM*/ true))
+               .appendStr(getTargetArchOption())
+               .appendStr(getTargetCPUOption())
                .appendList(getXllcOption())
                .appendList(getLLVMOptions())
                .appendStr("-filetype=obj")
@@ -842,14 +836,13 @@ static int emitOutputFiles(std::string outputNameNoExt,
     // Emit the version with all constants included.
     std::string outputNameWithExt =
         getTargetFilename(outputNameNoExt, emissionTarget);
-    if (!doNotEmitFullMLIRCode) {
-      int rc = outputCode(module, outputNameWithExt);
-      if (VerboseOutput)
-        llvm::outs() << "Full MLIR code written to:\n"
-                     << "\t" << outputNameWithExt << "\n\n";
-      if (rc != CompilerSuccess)
-        return rc;
-    }
+    int rc = outputCode(module, outputNameWithExt);
+    if (VerboseOutput)
+      llvm::outs() << "Full MLIR code written to:\n"
+                   << "\t" << outputNameWithExt << "\n\n";
+    if (rc != CompilerSuccess)
+      return rc;
+
     // Elide element attributes if larger than 100.
     if (emissionTarget == EmitONNXBasic || emissionTarget == EmitONNXIR ||
         emissionTarget == EmitMLIR) {
@@ -886,16 +879,14 @@ static const llvm::Target *getLLVMTarget(
   return LLVMTarget;
 }
 
-/// Return the module data layout string. The data layout string is determined
+/// Return the module datalayout string. The datalayout string is determined
 /// by creating a target machine using the target triple and target cpu.
 static std::string getDataLayout(const Location &loc) {
   const llvm::Target &LLVMTarget = *getLLVMTarget(mtriple, loc);
   llvm::TargetOptions ops;
-  std::string mcpuForLLVMToolchain = getTargetCPUOption(
-      /*forLLVM*/ true, /*cpu only*/ true);
   auto targetMachine =
       std::unique_ptr<llvm::TargetMachine>{LLVMTarget.createTargetMachine(
-          mtriple, mcpuForLLVMToolchain, "" /*features*/, ops, std::nullopt)};
+          mtriple, mcpu, "" /*features*/, ops, std::nullopt)};
   if (!targetMachine) {
     emitError(loc, "failed to create target machine");
     return nullptr;
@@ -903,7 +894,7 @@ static std::string getDataLayout(const Location &loc) {
 
   const llvm::DataLayout &dl = targetMachine->createDataLayout();
   std::string dataLayoutString = dl.getStringRepresentation();
-  assert(dataLayoutString != "" && "Expecting a valid target data layout");
+  assert(dataLayoutString != "" && "Expecting a valid target datalayout");
 
   return dataLayoutString;
 }
@@ -986,15 +977,11 @@ static int emitOutput(mlir::OwningOpRef<ModuleOp> &module,
 int compileModule(mlir::OwningOpRef<ModuleOp> &module,
     mlir::MLIRContext &context, std::string outputNameNoExt,
     EmissionTargetType emissionTarget) {
-  // When a C++ program calls this function directly without using onnx-mlir
-  // driver, there is no importing phase (e.g. the model is .mlir, not .onnx).
-  // Thus, decrease the total number of phases.
-  if (CURRENT_COMPILE_PHASE == 1) {
-    SET_TOTAL_COMPILE_PHASE(emissionTarget);
-    TOTAL_COMPILE_PHASE--;
-  }
-
   std::string msg = "Compiling and Optimizing MLIR Module";
+  // There is no importing phase (e.g. the model is .mlir, not .onnx), adjust to
+  // correctly reflect the current phase.
+  if (CURRENT_COMPILE_PHASE == 1)
+    CURRENT_COMPILE_PHASE++;
   showCompilePhase(msg);
   auto compileModuleTiming = rootTimingScope.nest("[onnx-mlir] " + msg);
 
@@ -1003,17 +990,6 @@ int compileModule(mlir::OwningOpRef<ModuleOp> &module,
     return rc;
 
   configurePasses();
-
-  // Enable printing for error handler on llvm error stream. Save ID if we want
-  // to disable it later. We currently disable for the llvm lowering, as
-  // otherwise we currently get an unrecognized warning for the "onnx.name"
-  // attribute in function operations. In Verbose mode, we keep the error
-  // handling all the way to the end.
-  diagnosticHandlerID =
-      context.getDiagEngine().registerHandler([](Diagnostic &diag) {
-        llvm::errs() << diag << "\n";
-        return mlir::LogicalResult::success();
-      });
 
   mlir::PassManager pm(
       module.get()->getName(), mlir::OpPassManager::Nesting::Implicit);
@@ -1024,7 +1000,6 @@ int compileModule(mlir::OwningOpRef<ModuleOp> &module,
   bool hasAccel = false;
   for (auto *accel : onnx_mlir::accel::Accelerator::getAccelerators()) {
     hasAccel = true;
-    accel->configurePasses();
     accel->addPasses(module, pm, emissionTarget, outputNameNoExt);
   }
   if (!hasAccel)

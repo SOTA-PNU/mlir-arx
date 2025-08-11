@@ -415,163 +415,9 @@ public:
   }
 };
 
-class ExpandAddConstantPattern : public OpRewritePattern<ONNXAddOp> {
-public:
-  using OpRewritePattern<ONNXAddOp>::OpRewritePattern;
-
-  /*
-    If add does not have a matmul input, check constant to be uni-broadcastable
-    to the non-constant term.
-
-    If add has a matmul input, check for these patterns.
-
-    Arch 14
-    type: input_a	input_b	input_c -> result
-    unstacked: ZDNN_2D(m,n)  ZDNN_2D(n,p) ZDNN_1D(p) -> ZDNN_2D(m,p)
-    bcast23: ZDNN_3DS(s,m,n) ZDNN_2D(n,p) ZDNN_1D(p) -> ZDNN_3DS(s,m,p)
-    stacked: ZDNN_3DS(s,m,n) ZDNN_3DS(s,n,p) ZDNN_2DS(p) -> ZDNN_3DS(s,m,p)
-      => ZDNN_3DS(s,m,n) ZDNN_3DS(s,n,p) ZDNN_2DS(s, 1, p) -> ZDNN_3DS(s,m,p)
-
-
-    Arch 15: Arch 14 plus patterns below,
-    bcast1: ZDNN_2D(m,n) ZDNN_3DS(s,n,p) ZDNN_2DS(p) -> ZDNN_3DS(s,m,p)
-      => ZDNN_2D(m,n) ZDNN_3DS(s,n,p) ZDNN_2DS(s,1,p) -> ZDNN_3DS(s,m,p)
-
-    staked and bcast1: Hardware need 2DS(s, p). To make broadcast legal, have to
-    add a "1" in between the s and the p. If we have only a (p), it works too
-    when we expand the added constant to s replicas of (p) to become (s, 1 p).
-    Hardware op will eventually get (s, p).
-  */
-  LogicalResult matchAndRewrite(
-      ONNXAddOp addOp, PatternRewriter &rewriter) const override {
-    // For the moment, requires constant shapes for B.
-    if (!hasStaticShape(addOp.getB().getType())) {
-      return failure();
-    }
-
-    // Try first matmul case, then add only.
-    if (processMatMulAddCase(addOp, rewriter) ||
-        processAddOnlyCase(addOp, rewriter))
-      return success();
-    return failure();
-  }
-
-  bool processMatMulAddCase(ONNXAddOp addOp, PatternRewriter &rewriter) const {
-    Value matMulVal, constVal;
-    bool mayFuseMatMulAdd = areDefinedBy<ONNXMatMulOp, ONNXConstantOp>(
-        addOp.getA(), addOp.getB(), matMulVal, constVal);
-    if (!mayFuseMatMulAdd)
-      return false;
-
-    ONNXConstantOp constOp = constVal.getDefiningOp<ONNXConstantOp>();
-    ONNXMatMulOp matMulOp = matMulVal.getDefiningOp<ONNXMatMulOp>();
-    assert(constOp && matMulOp && "expected defined ops here");
-    // Because we have static shape, ranked tensor must be present.
-    auto m1Type = mlir::cast<RankedTensorType>(matMulOp.getA().getType());
-    auto m2Type = mlir::cast<RankedTensorType>(matMulOp.getB().getType());
-    auto cType = mlir::cast<RankedTensorType>(constOp.getResult().getType());
-    int64_t m1Rank = m1Type.getRank();
-    int64_t m2Rank = m2Type.getRank();
-    int64_t cRank = cType.getRank();
-    ArrayRef<int64_t> cShape =
-        cType.getShape(); // Used to check 1 in [s, 1, p].
-
-    int64_t cDesiredRank = -1; // Signal undefined.
-    bool includeArch15 = isCompatibleWithNNPALevel(NNPALevel::M15);
-    if (m1Rank == 2 && m2Rank == 2) {
-      // Unstacked.
-      if (cRank == 1)
-        return true; // Constant has already the right rank, all good.
-      // Otherwise, failure for unstack.
-      return false;
-    } else if (m1Rank == 3 && m2Rank == 3) {
-      // Stacked.
-      if (cRank == 3 && cShape[1] == 1)
-        // Constant has already the right (expanded) c rank, all good.
-        return true;
-      if (cRank == 2 || cRank > 3)
-        // cRank is not an expanded 2D rank, or too big: not the right pattern.
-        return false;
-      // cRank is 1, needs to grow to 3.
-      cDesiredRank = 3;
-    } else if (includeArch15 && m1Rank == 2 && m2Rank == 3) {
-      // Bcast1, arch 15 only.
-      if (cRank == 3 && cShape[1] == 1)
-        // Constant has already the right (expanded) c rank, all good.
-        return true;
-      if (cRank == 2 || cRank > 3)
-        // cRank is not an expanded 2D rank, or too big: not the right pattern.
-        return false;
-      // cRank is 1, needs to grow to 3.
-      cDesiredRank = 3;
-    } else if (m1Rank == 3 && m2Rank == 2) {
-      // Bcast23.
-      if (cRank == 1)
-        return true; // Constant has already the right rank, all good.
-      // Otherwise bcast23 failure.
-      return false;
-    } else {
-      // Not one of the 4 acceptable pattern for fused multiply add
-      return false;
-    }
-    // Check assumption: should come here only if c rank is 1 to be expanded
-    // to 3, from Stacked or BCast1.
-    assert(cRank == 1 && cDesiredRank == 3 &&
-           "only rank combination that should reach here");
-    // The output of the matMul and add operations have the same shape here
-    // (since const rank < matmul rank). We avoid taking shape from the
-    // original add op as that op will be replaced.
-    assert(m2Rank == 3 && "only from stacked or BCast1");
-    ArrayRef<int64_t> m2Dims = getShape(m2Type);
-    // Generate computations with resized constants.
-    MultiDialectBuilder<OnnxBuilder> create(rewriter, addOp.getLoc());
-    Value shape = create.onnx.shape(matMulOp.getB(), {0, 2}, {1});
-    Type elementType = m2Type.getElementType();
-    Type constType =
-        RankedTensorType::get({m2Dims[0], 1, m2Dims[2]}, elementType);
-    Value expandedConst = create.onnx.expand(constType, constVal, shape);
-    Value newAdd = create.onnx.add(matMulVal, expandedConst);
-    rewriter.replaceOp(addOp.getOperation(), newAdd);
-    return true;
-  }
-
-  bool processAddOnlyCase(ONNXAddOp addOp, PatternRewriter &rewriter) const {
-    /* Mimic the former rule. Can assume constant in the B position due to
-       canonicalization rules for this optimization.
-
-       def expandConstantOperandForAddOp2: Pat<
-       (ONNXAddOp $x, (ONNXConstantOp:$c $_, $_, $_, $_, $_, $_, $_, $_)),
-       (ONNXAddOp $x, (ONNXExpandOp $c,
-                                    (CreateShapeOp $x),
-                                    (returnType $x))),
-       [(IsUniBroadcastingFromFirstToSecond $c, $x)]
-     >;
-    */
-    Operation *constOp;
-    Value constVal, inputVal;
-    bool isAddConst = operandOfOpDefinedBy<ONNXConstantOp>(
-        constOp, addOp.getOperation(), inputVal, constVal, 1);
-    if (!isAddConst)
-      return false;
-    if (!isUniBroadcatableFirstToSecond(constVal, addOp.getResult()))
-      return false;
-    // Emit the new add with expanded value.
-    MultiDialectBuilder<OnnxBuilder> create(rewriter, addOp.getLoc());
-    ArrayRef<int64_t> resDims = getShape(inputVal.getType());
-    Value shape = create.onnx.shape(inputVal);
-    Type elementType =
-        mlir::cast<RankedTensorType>(constVal.getType()).getElementType();
-    Type constType = RankedTensorType::get(resDims, elementType);
-    Value expandedConst = create.onnx.expand(constType, constVal, shape);
-    Value newAdd = create.onnx.add(inputVal, expandedConst);
-    rewriter.replaceOp(addOp.getOperation(), newAdd);
-    return true;
-  }
-};
-
 /// This pattern is to replace `C = add/sub(A, B)` by `A` when B is a zero
-/// defined by Expand of scalar constant and C's shape is the same as A's
-/// shape. In other words, the output does not depend on the second operand.
+/// defined by Expand of scalar constant and C's shape is the same as A's shape.
+/// In other words, the output does not depend on the second operand.
 /// This pattern is similar to Add/SubZerosOnRhs in ConstProp.td but allows
 /// dynamic shape.
 template <typename OP_TYPE>
@@ -661,7 +507,6 @@ void getRewriteONNXForZHighPatterns(
     RewritePatternSet &patterns, DimAnalysis *dimAnalysis) {
   populateWithGenerated(patterns);
   patterns.insert<SplitLargeMatMulPattern>(patterns.getContext());
-  patterns.insert<ExpandAddConstantPattern>(patterns.getContext());
   patterns.insert<AddSubWithRHSZeroExpandPattern<ONNXAddOp>>(
       patterns.getContext(), dimAnalysis);
   patterns.insert<AddSubWithRHSZeroExpandPattern<ONNXSubOp>>(
@@ -687,9 +532,8 @@ void getRewriteONNXForZHighDynamicallyLegal(
   addDynamicallyLegalOpFor<ONNXAddOp>(
       target, dimAnalysis, [](ONNXAddOp op, const DimAnalysis *dimAnalysis) {
         // Check NNPA level.
-        if (!isCompatibleWithNNPALevel(NNPALevel::M14))
-          return !onnxToZHighInCompatibilityReport(
-              op.getOperation(), NNPALevel::M14);
+        if (!isCompatibleWithNNPALevel(NNPA_Z16))
+          return !onnxToZHighInCompatibilityReport(op.getOperation(), NNPA_Z16);
         // Check element type.
         if (!isValidElementTypeAndRank(op.getOperation(), op.getA(), true))
           return true;
@@ -703,9 +547,8 @@ void getRewriteONNXForZHighDynamicallyLegal(
   addDynamicallyLegalOpFor<ONNXDivOp>(
       target, dimAnalysis, [](ONNXDivOp op, const DimAnalysis *dimAnalysis) {
         // Check NNPA level.
-        if (!isCompatibleWithNNPALevel(NNPALevel::M14))
-          return !onnxToZHighInCompatibilityReport(
-              op.getOperation(), NNPALevel::M14);
+        if (!isCompatibleWithNNPALevel(NNPA_Z16))
+          return !onnxToZHighInCompatibilityReport(op.getOperation(), NNPA_Z16);
         // Check element type.
         if (!isValidElementTypeAndRank(op.getOperation(), op.getA(), true))
           return true;
@@ -717,9 +560,8 @@ void getRewriteONNXForZHighDynamicallyLegal(
   addDynamicallyLegalOpFor<ONNXMulOp>(
       target, dimAnalysis, [](ONNXMulOp op, const DimAnalysis *dimAnalysis) {
         // Check NNPA level.
-        if (!isCompatibleWithNNPALevel(NNPALevel::M14))
-          return !onnxToZHighInCompatibilityReport(
-              op.getOperation(), NNPALevel::M14);
+        if (!isCompatibleWithNNPALevel(NNPA_Z16))
+          return !onnxToZHighInCompatibilityReport(op.getOperation(), NNPA_Z16);
         // Check element type.
         if (!isValidElementTypeAndRank(op.getOperation(), op.getA(), true))
           return true;
@@ -731,9 +573,8 @@ void getRewriteONNXForZHighDynamicallyLegal(
   addDynamicallyLegalOpFor<ONNXSubOp>(
       target, dimAnalysis, [](ONNXSubOp op, const DimAnalysis *dimAnalysis) {
         // Check NNPA level.
-        if (!isCompatibleWithNNPALevel(NNPALevel::M14))
-          return !onnxToZHighInCompatibilityReport(
-              op.getOperation(), NNPALevel::M14);
+        if (!isCompatibleWithNNPALevel(NNPA_Z16))
+          return !onnxToZHighInCompatibilityReport(op.getOperation(), NNPA_Z16);
         // Check element type.
         if (!isValidElementTypeAndRank(op.getOperation(), op.getA(), true))
           return true;
@@ -756,9 +597,8 @@ void getRewriteONNXForZHighDynamicallyLegal(
   addDynamicallyLegalOpFor<ONNXMatMulOp>(
       target, dimAnalysis, [](ONNXMatMulOp op, const DimAnalysis *dimAnalysis) {
         // Check NNPA level.
-        if (!isCompatibleWithNNPALevel(NNPALevel::M14))
-          return !onnxToZHighInCompatibilityReport(
-              op.getOperation(), NNPALevel::M14);
+        if (!isCompatibleWithNNPALevel(NNPA_Z16))
+          return !onnxToZHighInCompatibilityReport(op.getOperation(), NNPA_Z16);
 
         Value A = op.getA();
         Value B = op.getB();
@@ -792,143 +632,7 @@ void getRewriteONNXForZHighDynamicallyLegal(
         if (bRank == 2 && aRank > 3)
           return false;
 
-        // - both inputs are *the same* N-D, N > 3 and there is no
-        // broadcasting
-        if (aRank > 3 && (aRank == bRank)) {
-          bool sameBatchDims = true;
-          std::string message = "";
-          for (int64_t i = 0; i < aRank - 2; ++i) {
-            sameBatchDims &= (aShape[i] == bShape[i]);
-            if (aShape[i] != bShape[i])
-              message += "The dim " + std::to_string(i) + " of A and dim " +
-                         std::to_string(i) + " of B are not the same.";
-
-            if (sameBatchDims && ShapedType::isDynamic(aShape[i])) {
-              sameBatchDims &=
-                  dimAnalysis->sameDynDim(op.getA(), i, op.getB(), i);
-              if (!sameBatchDims)
-                message += "The dynamic dimension analysis couldn't identify "
-                           "that dim " +
-                           std::to_string(i) + " of A and dim " +
-                           std::to_string(i) + " of B are the same.";
-            }
-          }
-          return (!sameBatchDims) ||
-                 onnxToZHighUnsupportedReport(op.getOperation(), message);
-        }
-
-        // Make other cases legal.
-        return true;
-      });
-
-  // Determine if the pattern `DequantizeLinear (QLinearMatMul inputs)` is
-  // already legal (no need to rewrite) or need to rewrite. Considering the
-  // inputs of QLinearMatMul, the following cases must be rewritten:
-  // - both inputs are *the same* N-D (N > 3) and there is no broadcasting, or
-  // - one input is N-D (N > 3) and the other is 2-D, or
-  //
-  // For such cases, rewrite patterns will be added to turn QLinearMatMulOp
-  // into the one where N-D will become 3-D.
-  //
-  // Starting from ONNXDequantizeLinearOp in order to move Reshape after
-  // DequantizeLinear, so that QLinearMatMul is still followed by
-  // DequantizeLinear, which makes optimization for the pattern
-  // QLinearMatMul-DequantizeLinear easier. In other words, the result pattern
-  // would look like:
-  //
-  // ```
-  // A_3D   = ReshapeTo3D A_ND
-  // B_3D   = ReshapeTo3D B_ND
-  // QA_3D  = Quantize (A_3D)
-  // QB_3D  = Quantize (B_3D)
-  // QY_3D  = QLinearMatMul QA_3D, QB_3D
-  // Y_3D   = Dequantize QY_3D
-  // Y_ND   = ReshapeToND Y_3D
-  // ```
-  //
-  // instead of
-  //
-  // ```
-  // QA_ND  = Quantize (A_ND)
-  // QB_ND  = Quantize (B_ND)
-  // QA_3D  = ReshapeTo3D QA_ND
-  // QB_3D  = ReshapeTo3D QB_ND
-  // QY_3D  = QLinearMatMul QA_3D, QB_3D
-  // QY_ND  = ReshapeToND QY_3D
-  // Y_3D   = Dequantize QY_ND
-  // ```
-  //
-  addDynamicallyLegalOpFor<ONNXDequantizeLinearOp>(target, dimAnalysis,
-      [](ONNXDequantizeLinearOp dlOp, const DimAnalysis *dimAnalysis) {
-        // Check NNPA level.
-        if (!isCompatibleWithNNPALevel(NNPALevel::M15))
-          return !onnxToZHighInCompatibilityReport(
-              dlOp.getOperation(), NNPALevel::M15);
-
-        ONNXQLinearMatMulOp op =
-            dlOp.getX().getDefiningOp<ONNXQLinearMatMulOp>();
-        if (!op)
-          return !onnxToZHighUnsupportedReport(dlOp.getOperation(),
-              "Input is not defined by ONNXQLinearMatMulOp");
-
-        Value A = op.getA();
-        Value AScale = op.getAScale();
-        Value AZeroPoint = op.getAZeroPoint();
-        Value B = op.getB();
-        Value BScale = op.getBScale();
-        Value BZeroPoint = op.getBZeroPoint();
-        Value Y = op.getY();
-        Value YScale = op.getYScale();
-        Type aType = A.getType();
-        Type bType = B.getType();
-        Type yType = Y.getType();
-
-        if (!isRankedShapedType(aType) || !isRankedShapedType(bType)) {
-          std::string message = "A or B is not shaped type with rank";
-          return !onnxToZHighUnsupportedReport(op.getOperation(), message);
-        }
-
-        int64_t aRank = getRank(aType);
-        int64_t bRank = getRank(bType);
-        ArrayRef<int64_t> aShape = getShape(aType);
-        ArrayRef<int64_t> bShape = getShape(bType);
-
-        // Only support float32 <-> int8/uint8.
-        Type elemTyA = getElementType(aType);
-        Type elemTyAScale = getElementType(AScale.getType());
-        Type elemTyB = getElementType(bType);
-        Type elemTyBScale = getElementType(BScale.getType());
-        Type elemTyY = getElementType(yType);
-        Type elemTyYScale = getElementType(YScale.getType());
-        if (!elemTyAScale.isF32() || !elemTyBScale.isF32() ||
-            !elemTyYScale.isF32())
-          return !onnxToZHighUnsupportedReport(
-              op.getOperation(), "A or B or Y's scale is not f32");
-        if (!(elemTyA.isInteger(8) || elemTyA.isUnsignedInteger(8)))
-          return !onnxToZHighUnsupportedReport(
-              op.getOperation(), "A is not i8 or ui8");
-        if (!(elemTyB.isInteger(8) || elemTyB.isUnsignedInteger(8)))
-          return !onnxToZHighUnsupportedReport(
-              op.getOperation(), "B is not i8 or ui8");
-        if (!(elemTyY.isInteger(8) || elemTyY.isUnsignedInteger(8)))
-          return !onnxToZHighUnsupportedReport(
-              op.getOperation(), "Y is not i8 or ui8");
-
-        // Only support per-tensor quantization.
-        if (!isScalarTensor(AScale) || !isScalarTensor(BScale) ||
-            !isScalarTensor(AZeroPoint) || !isScalarTensor(BZeroPoint))
-          return !onnxToZHighUnsupportedReport(
-              op.getOperation(), "Not per-tensor quantization");
-
-        // - one input is N-D (N > 3) and the other is 2-D.
-        if (aRank == 2 && bRank > 3)
-          return false;
-
-        if (bRank == 2 && aRank > 3)
-          return false;
-
-        // - both inputs are *the same* N-D, N > 3 and there is no
-        // broadcasting
+        // - both inputs are *the same* N-D, N > 3 and there is no broadcasting
         if (aRank > 3 && (aRank == bRank)) {
           bool sameBatchDims = true;
           std::string message = "";
@@ -963,9 +667,8 @@ void getRewriteONNXForZHighDynamicallyLegal(
   addDynamicallyLegalOpFor<ONNXSoftmaxOp>(target, dimAnalysis,
       [](ONNXSoftmaxOp op, const DimAnalysis *dimAnalysis) {
         // Check NNPA level.
-        if (!isCompatibleWithNNPALevel(NNPALevel::M14))
-          return !onnxToZHighInCompatibilityReport(
-              op.getOperation(), NNPALevel::M14);
+        if (!isCompatibleWithNNPALevel(NNPA_Z16))
+          return !onnxToZHighInCompatibilityReport(op.getOperation(), NNPA_Z16);
 
         Value input = op.getInput();
         // std::string message = "The `input` is not reshaped to 3D because it
@@ -1000,8 +703,8 @@ void getRewriteONNXForZHighDynamicallyLegal(
   addDynamicallyLegalOpFor<ONNXReshapeOp>(target, dimAnalysis,
       [](ONNXReshapeOp op, const DimAnalysis *dimAnalysis) {
         // Get rid of identity reshape here, as it impacts stick/unstick.
-        // So all reshape are legal, unless it is an identity reshape, in
-        // which case there is a rule here to remove it.
+        // So all reshape are legal, unless it is an identity reshape, in which
+        // case there is a rule here to remove it.
         return !isIdentityReshape(op, dimAnalysis);
       });
 }
@@ -1031,8 +734,8 @@ void RewriteONNXForZHighPass::runOnOperation() {
   // final target for this lowering.
   ConversionTarget target(getContext());
 
-  // We define the specific operations, or dialects, that are legal targets
-  // for this lowering.
+  // We define the specific operations, or dialects, that are legal targets for
+  // this lowering.
   target.addLegalDialect<ONNXDialect, zhigh::ZHighDialect, func::FuncDialect>();
   onnx_mlir::getRewriteONNXForZHighDynamicallyLegal(&target, &dimAnalysis);
 

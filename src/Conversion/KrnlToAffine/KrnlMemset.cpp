@@ -57,9 +57,8 @@ public:
     int rank = ubs.size();
     SmallVector<IndexExpr, 4> lbs(rank, LitIE(0));
     SmallVector<int64_t, 4> steps(rank, 1);
-    SmallVector<bool, 4> useParallel(rank, false);
     // Copy data,
-    create.affineKMem.forLoopsIE(lbs, ubs, steps, useParallel,
+    create.affineKMem.forLoopsIE(lbs, ubs, steps,
         [&](const AffineBuilderKrnlMem &createAffine, ValueRange indices) {
           createAffine.store(destVal, destMemRef, indices);
         });

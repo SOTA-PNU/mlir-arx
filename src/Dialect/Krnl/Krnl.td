@@ -567,7 +567,7 @@ def KrnlParallelClauseOp : Op<Krnl_Dialect, "parallel_clause"> {
   }];
 }
 
-def KrnlRoundEvenOp : Op<Krnl_Dialect, "round_even", [Pure]> {
+def KrnlRoundEvenOp : Op<Krnl_Dialect, "round_even"> {
   let summary = "Krnl round to nearest even operation";
   let description = [{
     Krnl round to nearest even operation.  Accept scalar or vector float values.
@@ -578,7 +578,7 @@ def KrnlRoundEvenOp : Op<Krnl_Dialect, "round_even", [Pure]> {
   let results = (outs FloatLike:$out);
 }
 
-def KrnlErfOp : Op<Krnl_Dialect, "erf", [Pure]> {
+def KrnlErfOp : Op<Krnl_Dialect, "erf"> {
   let summary = "Krnl erf scalar operation";
   let description = [{
     Krnl erf scalar operation.
@@ -588,7 +588,7 @@ def KrnlErfOp : Op<Krnl_Dialect, "erf", [Pure]> {
   let results = (outs AnyFloat:$out);
 }
 
-def KrnlIsInfOp : Op<Krnl_Dialect, "isinf", [Pure]> {
+def KrnlIsInfOp : Op<Krnl_Dialect, "isinf"> {
   let summary = "Krnl isinf scalar operation";
   let description = [{
     Krnl isinf scalar operation.
@@ -598,7 +598,7 @@ def KrnlIsInfOp : Op<Krnl_Dialect, "isinf", [Pure]> {
   let results = (outs I1:$out);
 }
 
-def KrnlIsNaNOp : Op<Krnl_Dialect, "isnan", [Pure]> {
+def KrnlIsNaNOp : Op<Krnl_Dialect, "isnan"> {
   let summary = "Krnl isnan scalar operation";
   let description = [{
     Krnl isnan scalar operation.
@@ -608,7 +608,7 @@ def KrnlIsNaNOp : Op<Krnl_Dialect, "isnan", [Pure]> {
   let results = (outs I1:$out);
 }
 
-def KrnlAcosOp : Op<Krnl_Dialect, "acos", [Pure]> {
+def KrnlAcosOp : Op<Krnl_Dialect, "acos"> {
   let summary = "Krnl acos scalar operation";
   let description = [{
     Krnl acos scalar operation.
@@ -618,7 +618,7 @@ def KrnlAcosOp : Op<Krnl_Dialect, "acos", [Pure]> {
   let results = (outs AnyFloat:$out);
 }
 
-def KrnlAcoshOp : Op<Krnl_Dialect, "acosh", [Pure]> {
+def KrnlAcoshOp : Op<Krnl_Dialect, "acosh"> {
   let summary = "Krnl acosh scalar operation";
   let description = [{
     Krnl acosh scalar operation.
@@ -628,7 +628,7 @@ def KrnlAcoshOp : Op<Krnl_Dialect, "acosh", [Pure]> {
   let results = (outs AnyFloat:$out);
 }
 
-def KrnlAsinOp : Op<Krnl_Dialect, "asin", [Pure]> {
+def KrnlAsinOp : Op<Krnl_Dialect, "asin"> {
   let summary = "Krnl asin scalar operation";
   let description = [{
     Krnl asin scalar operation.
@@ -638,7 +638,7 @@ def KrnlAsinOp : Op<Krnl_Dialect, "asin", [Pure]> {
   let results = (outs AnyFloat:$out);
 }
 
-def KrnlAsinhOp : Op<Krnl_Dialect, "asinh", [Pure]> {
+def KrnlAsinhOp : Op<Krnl_Dialect, "asinh"> {
   let summary = "Krnl asinh scalar operation";
   let description = [{
     Krnl asinh scalar operation.
@@ -648,7 +648,7 @@ def KrnlAsinhOp : Op<Krnl_Dialect, "asinh", [Pure]> {
   let results = (outs AnyFloat:$out);
 }
 
-def KrnlAtanOp : Op<Krnl_Dialect, "atan", [Pure]> {
+def KrnlAtanOp : Op<Krnl_Dialect, "atan"> {
   let summary = "Krnl atan scalar operation";
   let description = [{
     Krnl atan scalar operation.
@@ -658,7 +658,7 @@ def KrnlAtanOp : Op<Krnl_Dialect, "atan", [Pure]> {
   let results = (outs AnyFloat:$out);
 }
 
-def KrnlAtanhOp : Op<Krnl_Dialect, "atanh", [Pure]> {
+def KrnlAtanhOp : Op<Krnl_Dialect, "atanh"> {
   let summary = "Krnl atanh scalar operation";
   let description = [{
     Krnl atanh scalar operation.
@@ -668,7 +668,7 @@ def KrnlAtanhOp : Op<Krnl_Dialect, "atanh", [Pure]> {
   let results = (outs AnyFloat:$out);
 }
 
-def KrnlTanOp : Op<Krnl_Dialect, "tan", [Pure]> {
+def KrnlTanOp : Op<Krnl_Dialect, "tan"> {
   let summary = "Krnl tan scalar operation";
   let description = [{
     Krnl tan scalar operation.
@@ -1305,8 +1305,7 @@ def KrnlCopyFromBufferOp : Op<Krnl_Dialect, "copy_from_tile_buffer",
 }
 
 def KrnlInstrumentOp : Op<Krnl_Dialect, "runtime_instrument",
-    [DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]
-  > {
+    []> {
   let summary = "instrumentation point.";
   let description = [{
     Operation that invokes the runtime instrument utility.
@@ -1382,7 +1381,7 @@ def KrnlRandomNormalOp : Op<Krnl_Dialect, "random_normal",
     Operation that generates a random normally distributed tensor.
   }];
 
-  let arguments = (ins Arg<AnyTypeOf<[AnyMemRef]>, "output of the random tensor", [MemWrite]>:$output,
+  let arguments = (ins AnyTypeOf<[AnyMemRef]>:$output,
     Index:$numberOfValues,
     AnyFloat:$mean,
     AnyFloat:$scale,
@@ -1423,7 +1422,7 @@ def KrnlNoneOp : Op<Krnl_Dialect, "noValue"> {
     }]>];
 }
 
-def KrnlPrintTensorOp : Op<Krnl_Dialect, "print_tensor", [MemRefsNormalizable, DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+def KrnlPrintTensorOp : Op<Krnl_Dialect, "print_tensor", [MemRefsNormalizable]> {
   let summary = "Print a tensor.";
   let description = [{
     This operation can be used to generate a call to a runtime function which prints a tensor.
@@ -1440,7 +1439,7 @@ def KrnlPrintTensorOp : Op<Krnl_Dialect, "print_tensor", [MemRefsNormalizable, D
   let arguments = (ins StrAttr:$msg, AnyMemRef:$input);
 }
 
-def KrnlPrintOp : Op<Krnl_Dialect, "print", [MemRefsNormalizable, DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+def KrnlPrintOp : Op<Krnl_Dialect, "print", [MemRefsNormalizable]> {
   let summary = "Print a value.";
   let description = [{
     This operation can be used to print the input value. The user needs to provide a

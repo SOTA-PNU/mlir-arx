@@ -11,32 +11,17 @@ file(GENERATE
   )
 
 # TODO: Remove pybind11::python_link_helper after cmake version bumped to 3.16+
-if(NOT ONNX_MLIR_ENABLE_PYRUNTIME_LIGHT)
-  add_onnx_mlir_library(OMPyExecutionSessionBase
-    PyExecutionSessionBase.cpp
+add_onnx_mlir_library(OMPyExecutionSessionBase
+  PyExecutionSessionBase.cpp
 
-    EXCLUDE_FROM_OM_LIBS
+  EXCLUDE_FROM_OM_LIBS
 
-    LINK_LIBS PUBLIC
-    OMExecutionSession
-    OMMlirUtilities
-    pybind11::embed
-    pybind11::python_link_helper
-    )
-else()
-  add_compile_definitions(ENABLE_PYRUNTIME_LIGHT)
-  add_onnx_mlir_library(OMPyExecutionSessionBase
-    PyExecutionSessionBase.cpp
-
-    EXCLUDE_FROM_OM_LIBS
-
-    LINK_LIBS PUBLIC
-    OMExecutionSession
-    pybind11::embed
-    pybind11::python_link_helper
+  LINK_LIBS PUBLIC
+  OMExecutionSession
+  OMMlirUtilities
+  pybind11::embed
+  pybind11::python_link_helper
   )
-endif()
-
 if(MSVC)
   target_link_libraries(OMPyExecutionSessionBase
     PRIVATE pybind11::windows_extras
@@ -107,32 +92,6 @@ install(TARGETS PyRuntimeC
   DESTINATION lib
   )
 
-# Target to prepare onnxmlir package
-file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/onnxmlir/src/onnxmlir/libs)
-
-add_custom_target(OMCreatePyRuntimePackage
-        COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/onnxmlir ${CMAKE_CURRENT_BINARY_DIR}
-        COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/onnxmlirdocker.py ${CMAKE_CURRENT_BINARY_DIR}/onnxmlir/src/onnxmlir/
-        COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/PyRuntime.py ${CMAKE_CURRENT_BINARY_DIR}/onnxmlir/src/onnxmlir
-        COMMAND cp ${ONNX_MLIR_BIN_ROOT}/${CMAKE_BUILD_TYPE}/lib/PyRuntimeC.*.so ${CMAKE_CURRENT_BINARY_DIR}/onnxmlir/src/onnxmlir/libs
-        DEPENDS PyRuntimeC
-     )
-
-# Target to prepare onnxmlirtorch package
-add_custom_target(OMCreateONNXMLIRTorchPackage
-        COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/onnxmlirtorch ${CMAKE_CURRENT_BINARY_DIR}
-        COMMAND cp ${ONNX_MLIR_BIN_ROOT}/${CMAKE_BUILD_TYPE}/lib/PyRuntimeC.*.so ${CMAKE_CURRENT_BINARY_DIR}/onnxmlirtorch/src/onnxmlirtorch/
-        COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/onnxmlirdocker.py ${CMAKE_CURRENT_BINARY_DIR}/onnxmlirtorch/src/onnxmlirtorch
-        COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/PyRuntime.py ${CMAKE_CURRENT_BINARY_DIR}/onnxmlirtorch/src/onnxmlirtorch
-        DEPENDS PyRuntimeC
-     )
-
-if(ONNX_MLIR_ENABLE_PYRUNTIME_LIGHT)
-  # Since the compiler is not built when PYRUNTIME_LIGHT is enabled,
-  # PyCompileAndRuntime can not be simply built.
-  return()
-endif()
-
 pybind11_add_module(PyCompileAndRuntimeC PyOMCompileExecutionSession.cpp)
 add_dependencies(PyCompileAndRuntimeC onnx_proto)
 target_compile_options(PyCompileAndRuntimeC
@@ -159,4 +118,3 @@ llvm_update_compile_flags(PyCompileAndRuntimeC)
 install(TARGETS PyCompileAndRuntimeC
   DESTINATION lib
   )
-

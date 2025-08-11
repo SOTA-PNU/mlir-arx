@@ -22,9 +22,6 @@ LogicalResult ONNXUniqueOpShapeHelper::computeShape() {
   ONNXUniqueOpAdaptor operandAdaptor(operands, op->getAttrDictionary());
   // Get info about X and K operands.
   Value X = operandAdaptor.getX();
-  if (!hasShapeAndRank(X)) {
-    return failure();
-  }
   int64_t rank = createIE->getShapedTypeRank(X);
   std::optional<int64_t> optionalAxis = operandAdaptor.getAxis();
   // Generate the output dims.

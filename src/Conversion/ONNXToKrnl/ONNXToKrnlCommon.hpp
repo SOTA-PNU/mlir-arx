@@ -335,10 +335,6 @@ void populateLoweringONNXGemmOpPattern(mlir::RewritePatternSet &,
     bool enableSIMD, bool enableParallel);
 void populateLoweringONNXHardmaxOpPattern(
     mlir::RewritePatternSet &, mlir::TypeConverter &, mlir::MLIRContext *);
-void populateLoweringONNXLpNormalizationOpPattern(
-    mlir::RewritePatternSet &, mlir::TypeConverter &, mlir::MLIRContext *);
-void populateLoweringONNXWindowOpPattern(
-    mlir::RewritePatternSet &, mlir::TypeConverter &, mlir::MLIRContext *);
 void populateLoweringONNXLRNOpPattern(
     mlir::RewritePatternSet &, mlir::TypeConverter &, mlir::MLIRContext *);
 void populateLoweringONNXMatMulOpPattern(mlir::RewritePatternSet &,
@@ -346,15 +342,9 @@ void populateLoweringONNXMatMulOpPattern(mlir::RewritePatternSet &,
     bool enableTiling, bool enableSIMD, bool enableParallel);
 void populateLoweringONNXMatMulIntegerOpPattern(
     mlir::RewritePatternSet &, mlir::TypeConverter &, mlir::MLIRContext *);
-void populateLoweringONNXMeanVarianceNormalizationOpPattern(
-    mlir::RewritePatternSet &, mlir::TypeConverter &, mlir::MLIRContext *);
-void populateLoweringONNXQLinearMatMulOpPattern(
-    mlir::RewritePatternSet &, mlir::TypeConverter &, mlir::MLIRContext *);
 void populateLoweringONNXRandomNormalOpPattern(
     mlir::RewritePatternSet &, mlir::TypeConverter &, mlir::MLIRContext *);
 void populateLoweringONNXRandomNormalLikeOpPattern(
-    mlir::RewritePatternSet &, mlir::TypeConverter &, mlir::MLIRContext *);
-void populateLoweringONNXRandomUniformOpPattern(
     mlir::RewritePatternSet &, mlir::TypeConverter &, mlir::MLIRContext *);
 void populateLoweringONNXReductionOpPattern(mlir::RewritePatternSet &,
     mlir::TypeConverter &, mlir::MLIRContext *, bool enableSIMD,
@@ -645,7 +635,7 @@ bool findSuitableParallelDimension(mlir::ArrayRef<IndexExpr> lb,
 // size of the memref being collapsed for SIMD. simdLoopStaticTripCount:
 // provide an estimation of the SIMD loop trip count. If runtime, return -1;
 // if cannot simdize, return 0; otherwise, return that literal.
-int64_t computeSuitableSimdUnrollFactor(mlir::MemRefType memRefType,
+int64_t computeSuitableUnrollFactor(mlir::MemRefType memRefType,
     int64_t collapsedInnermostLoops, int64_t maxUnrollVL, bool canOverCompute,
     int64_t &simdLoopStaticTripCount);
 
@@ -667,17 +657,17 @@ int64_t computeSuitableSimdUnrollFactor(mlir::MemRefType memRefType,
 //
 // Now some SIMD scheme may allow to write past the last original loop
 // iterations; in this case we may ignore the simdOnly flag .
-int64_t computeSuitableSimdUnrollFactor(mlir::MemRefType memRefType,
+int64_t computeSuitableUnrollFactor(mlir::MemRefType memRefType,
     int64_t collapsedInnermostLoops, GenOpMix &GenOps, bool canOverCompute,
     int64_t &simdLoopStaticTripCount, bool &simdOnly);
 // Cap totVL so that it is at most maxUnrollVL * archVL.
-int64_t capVLForMaxSimdUnroll(
+int64_t capVLForMaxUnroll(
     mlir::MemRefType memRefType, int64_t totVL, int64_t maxUnrollVL);
 // In some type conversion loops we may have a given totVL based on a given
 // memRef type and gen op mix. But the final result may be converted to a
 // different type, which may requires a minimum unroll to proceed as a single
 // SIMD operation. This call adjust the totVL for that case.
-int64_t boostVLForMinSimdUnroll(mlir::MemRefType memRefType,
+int64_t boostVLForMinUnroll(mlir::MemRefType memRefType,
     mlir::MemRefType convertedMemRefType, int64_t totVL);
 // Enabling a simdOnly code generation scheme by capping totVL so that it
 // divides simdLoopStaticTripCount. When not possible (either because
@@ -685,13 +675,6 @@ int64_t boostVLForMinSimdUnroll(mlir::MemRefType memRefType,
 // runtime only), then disable SIMD by returning totVL = 1.
 int64_t capVLForSimdOnly(mlir::MemRefType memRefType, int64_t totVL,
     int64_t simdLoopStaticTripCount);
-
-// Unrelated to SIMD: find the largest unroll factor that divides the trip count
-// (lb -ub). When the trip count is not a compile time constant, return 1. When
-// no unroll factor can divide the trip count, also return 1.
-// literalTripCount is set when trip count is compile time constant.
-int64_t getNoLeftoverUnrollFactor(IndexExpr &lb, IndexExpr &ub,
-    int64_t unrollFactor, int64_t &literalTripCount);
 
 //===----------------------------------------------------------------------===//
 // Support functions for reporting.
@@ -770,31 +753,6 @@ void emitMinMaxReductionToScalar(mlir::ConversionPatternRewriter &rewriter,
     mlir::Location loc, mlir::Operation *op, mlir::Value input,
     mlir::Value &minAlloc, mlir::Value &maxAlloc, bool enableSIMD,
     bool enableParallel);
-
-// Compute the reciprocal scale (recscale) for the symmetric quantization. Can
-// generate parallel and SIMD code as requested. Formula for recscale:
-// ```
-// recscale  = (2^(b-1) - 1) / absmax(X)
-// ```
-// where
-// - X is the input tensor,
-// - b is the number of bits we want to quantize to (e.g. 8 for integer 8), and
-// - absmax is a function to compute the absolute maximun value over entire
-// tensor
-//
-void emitSymmetricQuantRecscaleToScalar(
-    mlir::ConversionPatternRewriter &rewriter, mlir::Location loc,
-    mlir::Operation *op, mlir::Value input, uint64_t bitWidth,
-    mlir::Value &recscale, bool enableSIMD, bool enableParallel);
-
-// Generate safe code for GatherOp and GatherElementsOp.
-// Insert runtime check for the value of indices.
-// If the value is out of scope of the `axis` dimension of input data,
-// warning message will be printed and the value will be change to zero to
-// avoid crash or assertion error.
-void genSafeCodeForGatherAlike(mlir::ConversionPatternRewriter &rewriter,
-    mlir::Location loc, mlir::Operation *op, mlir::Value data,
-    mlir::Value indices, int64_t axisLit);
 
 } // namespace onnx_mlir
 #endif

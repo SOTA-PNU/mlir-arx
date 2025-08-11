@@ -71,11 +71,7 @@ void registerOMPasses(int optLevel) {
       []() -> std::unique_ptr<mlir::Pass> { return createInstrumentPass(); });
 
   mlir::registerPass([]() -> std::unique_ptr<mlir::Pass> {
-    return createInstrumentCleanupPass();
-  });
-
-  mlir::registerPass([]() -> std::unique_ptr<mlir::Pass> {
-    return createInstrumentONNXSignaturePass("NONE", "NONE");
+    return createInstrumentONNXSignaturePass("NONE");
   });
 
   mlir::registerPass([]() -> std::unique_ptr<mlir::Pass> {
@@ -157,7 +153,7 @@ void registerMLIRPasses() {
     return mlir::createLowerAffinePass();
   });
   mlir::registerPass([]() -> std::unique_ptr<mlir::Pass> {
-    return mlir::createSCFToControlFlowPass();
+    return mlir::createConvertSCFToCFPass();
   });
   mlir::registerPass([]() -> std::unique_ptr<mlir::Pass> {
     return mlir::createConvertVectorToLLVMPass();

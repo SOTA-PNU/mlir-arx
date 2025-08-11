@@ -12,9 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef ONNX_MLIR_SMALL_VECTOR_HELPER_H
-#define ONNX_MLIR_SMALL_VECTOR_HELPER_H
-
 #include "llvm/ADT/SmallVector.h"
 
 //===----------------------------------------------------------------------===//
@@ -106,5 +103,3 @@ llvm::SmallVector<T, N> lastFew(
     res.emplace_back(vec[i]);
   return res;
 }
-
-#endif

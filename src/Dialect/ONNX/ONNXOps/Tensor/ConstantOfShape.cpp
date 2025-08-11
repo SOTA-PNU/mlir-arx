@@ -70,10 +70,6 @@ LogicalResult ONNXConstantOfShapeOp::verify() {
   if (auto constantOp = getONNXConstantOp(input)) {
     ElementsAttr valueAttribute =
         mlir::cast<ElementsAttr>(constantOp.getValueAttr());
-    if (isElementAttrUninitializedDenseResource(valueAttribute)) {
-      return success(); // Return success to allow the parsing of MLIR with
-                        // elided attributes
-    }
     // Get repeat values from valueAttribute.
     auto valueIt = valueAttribute.getValues<IntegerAttr>().begin();
     for (int i = 0; i < inputShape[0]; ++i) {
@@ -99,7 +95,7 @@ std::vector<Type> ONNXConstantOfShapeOp::resultTypeInference() {
   if (auto attr = getValueAttr()) {
     elementType = mlir::cast<ElementsAttr>(attr).getElementType();
   } else {
-    elementType = Float32Type::get(getContext());
+    elementType = FloatType::getF32(getContext());
   }
   return {UnrankedTensorType::get(elementType)};
 }
@@ -125,7 +121,7 @@ LogicalResult ONNXConstantOfShapeOp::inferShapes(
   } else {
     // If 'value' attribute is not specified, it defaults to a tensor of
     // value 0 and datatype float32.
-    elementType = Float32Type::get(getContext());
+    elementType = FloatType::getF32(getContext());
 
     llvm::SmallVector<int64_t, 2> dims(1, 1);
     auto tensorType = RankedTensorType::get(dims, elementType);

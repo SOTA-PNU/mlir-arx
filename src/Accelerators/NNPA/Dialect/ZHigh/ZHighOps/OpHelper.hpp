@@ -34,14 +34,6 @@ ZTensorEncodingAttr::DataLayout getZTensorDataLayoutByRank(int64_t rank);
 mlir::StringAttr convertZTensorDataLayoutToStringAttr(
     mlir::OpBuilder &builder, ZTensorEncodingAttr::DataLayout layout);
 
-/// Get a ztensor quantized type by StringAttr.
-ZTensorEncodingAttr::QuantizedType convertStringAttrToZTensorQuantizedType(
-    mlir::StringAttr qtypeAttr);
-
-/// Convert a quantized type to StringAttr.
-mlir::StringAttr convertZTensorQuantizedTypeToStringAttr(
-    mlir::OpBuilder &builder, ZTensorEncodingAttr::QuantizedType qtype);
-
 //===----------------------------------------------------------------------===//
 // Convenience method to query information of a ztensor
 
@@ -59,9 +51,6 @@ ZTensorEncodingAttr::DataLayout getZTensorLayout(mlir::Type type);
 mlir::StringAttr getZTensorLayoutAttr(
     mlir::OpBuilder &builder, mlir::Type type);
 
-/// Get the quantized type of a ztensor.
-ZTensorEncodingAttr::QuantizedType getZTensorQuantizedType(mlir::Type type);
-
 /// Get a minus value.
 mlir::Value getMinusBcastConst(mlir::OpBuilder &builder, mlir::Location loc,
     mlir::FloatAttr floatAttr, mlir::Value input);
@@ -74,33 +63,22 @@ mlir::Value getConstantOfType(
 bool oneIsOfLayout(
     mlir::Type t1, mlir::Type t2, ZTensorEncodingAttr::DataLayout layout);
 
-/// Check if ONNXReshapeOp is reshaping 2D/3D to 4D by tiling an input
+/// Check if ONNXReshapeOp is reshaping 2D/3D to 4D by tiling each input
 /// dimension.
 bool isTiling2DTo4D(mlir::Value val);
 mlir::AffineMapAttr getTiling2DTo4DMap(mlir::OpBuilder &b, mlir::Value val);
-bool isLeftmostTiling3DTo4D(mlir::Value val);
-bool isRightmostTiling3DTo4D(mlir::Value val, int64_t tilingSize);
-mlir::AffineMapAttr getLeftmostTiling3DTo4DMap(
-    mlir::OpBuilder &b, mlir::Value val);
-/// Check if ONNXReshapeOp is collapsing 4D into 3D by merging the first two
-/// (leftmost) dimensions.
-bool isLeftmostCollapsing4DTo3D(mlir::Value val);
-/// Check if ONNXReshapeOp is collapsing 4D into 3D by merging the last two
-/// (rightmost) dimensions.
-bool isRightmostCollapsing4DTo3D(mlir::Value val);
-mlir::AffineMapAttr getLeftmostCollapsing4DTo3DMap(
-    mlir::OpBuilder &b, mlir::Value val);
+bool isTiling3DTo4D(mlir::Value val);
+mlir::AffineMapAttr getTiling3DTo4DMap(mlir::OpBuilder &b, mlir::Value val);
+/// Check if ONNXReshapeOp is collapsing 4D into 3D/2D by merging the first two
+/// dimensions.
+bool isCollapsing4DTo3D(mlir::Value val);
+mlir::AffineMapAttr getCollapsing4DTo3DMap(mlir::OpBuilder &b, mlir::Value val);
 bool isCollapsing4DTo2D(mlir::Value val);
 mlir::AffineMapAttr getCollapsing4DTo2DMap(mlir::OpBuilder &b, mlir::Value val);
 /// Get an affine map for the permutation array.
 mlir::AffineMapAttr getTransposeMap(
     mlir::OpBuilder &b, mlir::ArrayAttr permAttr);
-/// Check the values of a transpose map to be equal to the permVals.
-bool isTransposePermutationEqualTo(
-    mlir::ArrayAttr permAttr, mlir::ArrayRef<int64_t> permVals);
-/// Return true when shape(Value)[index] % multipleVal == 0.
-/// Negative indices, count from the back (-1 is last element).
-bool isShapeDimMultipleOf(mlir::Value val, int64_t index, int64_t multipleVal);
+
 /// Get an axis for NHWC layout given an axis for NCHW layout.
 mlir::IntegerAttr getAxisNHWC(mlir::IntegerAttr axisNCHWAttr);
 

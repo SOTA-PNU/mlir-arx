@@ -318,6 +318,16 @@ GenOpMix getGenOpMix<ONNXSinOp>(Type t, Operation *op) {
 }
 
 template <>
+struct ScalarOp<ONNXPowOp> {
+  using FOp = math::PowFOp;
+  using IOp = NotSuportedScalarOp;
+};
+template <>
+GenOpMix getGenOpMix<ONNXPowOp>(Type t, Operation *op) {
+  return {{GenericOps::PowGop, 1}};
+}
+
+template <>
 struct ScalarOp<ONNXIsNaNOp> {
   using FOp = KrnlIsNaNOp;
   using IOp = NotSuportedScalarOp;
@@ -358,46 +368,6 @@ struct ScalarOp<ONNXTanOp> {
   using FOp = KrnlTanOp;
   using IOp = NotSuportedScalarOp;
 };
-//===----------------------------------------------------------------------===//
-// Scalar binary ops for lowering ONNXBitShiftOp
-//===----------------------------------------------------------------------===//
-template <>
-struct ScalarOp<ONNXBitShiftOp> {
-  using FOp = NotSuportedScalarOp;
-  using IOp = CustomScalarOp;
-};
-
-template <>
-GenOpMix getGenOpMix<ONNXBitShiftOp>(Type t, Operation *op) {
-  return {{GenericOps::ShiftGop, 1}};
-}
-
-template <>
-Value emitScalarOpFor<ONNXBitShiftOp>(ConversionPatternRewriter &rewriter,
-    Location loc, Operation *op, Type elementType,
-    ArrayRef<Value> scalarOperands) {
-  Value input = scalarOperands[0];
-  Value shift = scalarOperands[1];
-
-  CheckIfCustomScalarOpIsSupported<ONNXBitShiftOp>(elementType);
-  MultiDialectBuilder<MathBuilder> create(rewriter, loc);
-
-  // If the attribute "direction" is RIGHT, this operator moves its binary
-  // representation toward the right side so that the input value is effectively
-  // decreased. If the attribute "direction" is LEFT, bits of binary
-  // representation moves toward the left side, which results the increase of
-  // its actual value
-
-  StringRef direction = mlir::dyn_cast<ONNXBitShiftOp>(op).getDirection();
-
-  if (direction.equals_insensitive("LEFT")) {
-    return create.math.shli(input, shift);
-  }
-  if (direction.equals_insensitive("RIGHT")) {
-    return create.math.shri(input, shift);
-  }
-  llvm_unreachable("unsupported case for this particular op.");
-}
 
 //===----------------------------------------------------------------------===//
 // Scalar unary ops for lowering ONNXGeluOp
@@ -538,35 +508,6 @@ Value emitScalarOpFor<ONNXCastOp>(ConversionPatternRewriter &rewriter,
 }
 
 //===----------------------------------------------------------------------===//
-// Scalar unary ops for lowering ONNXBinarizerOp
-//===----------------------------------------------------------------------===//
-template <>
-struct ScalarOp<ONNXBinarizerOp> {
-  using FOp = CustomScalarOp;
-  using IOp = CustomScalarOp;
-};
-
-template <>
-GenOpMix getGenOpMix<ONNXBinarizerOp>(Type t, Operation *op) {
-  return {{GenericOps::CompareGop, 1}, {GenericOps::ConversionGop, 1}};
-}
-
-template <>
-Value emitScalarOpFor<ONNXBinarizerOp>(ConversionPatternRewriter &rewriter,
-    Location loc, Operation *op, Type elementType,
-    ArrayRef<Value> scalarOperands) {
-  // ONNXBinarizerOp: If x > threshold ? 1 : 0;
-  CheckIfCustomScalarOpIsSupported<ONNXBinarizerOp>(elementType);
-  Value operand = scalarOperands[0];
-  double thresholdLit =
-      mlir::dyn_cast<ONNXBinarizerOp>(op).getThreshold().convertToFloat();
-  MultiDialectBuilder<MathBuilder> create(rewriter, loc);
-  Value threshold = create.math.constant(elementType, thresholdLit);
-  Value isGreaterThanThreshold = create.math.sgt(operand, threshold);
-  return create.math.cast(elementType, isGreaterThanThreshold);
-}
-
-//===----------------------------------------------------------------------===//
 // Scalar unary ops for lowering ONNXSinhOp
 //===----------------------------------------------------------------------===//
 template <>
@@ -662,45 +603,6 @@ Value emitScalarOpFor<ONNXSigmoidOp>(ConversionPatternRewriter &rewriter,
 }
 
 //===----------------------------------------------------------------------===//
-// Scalar unary ops for lowering ONNXShrinkOp
-//===----------------------------------------------------------------------===//
-template <>
-struct ScalarOp<ONNXShrinkOp> {
-  using FOp = CustomScalarOp;
-  using IOp = NotSuportedScalarOp;
-};
-
-template <>
-GenOpMix getGenOpMix<ONNXShrinkOp>(Type t, Operation *op) {
-  return {{GenericOps::ArithmeticGop, 3}, {GenericOps::CompareGop, 2},
-      {GenericOps::SelectGop, 2}};
-}
-
-template <>
-Value emitScalarOpFor<ONNXShrinkOp>(ConversionPatternRewriter &rewriter,
-    Location loc, Operation *op, Type elementType,
-    ArrayRef<Value> scalarOperands) {
-  // ONNXShrinkOp: If x < -lambd, y = x + bias;
-  // If x > lambd, y = x - bias;Otherwise, y = 0.
-  CheckIfCustomScalarOpIsSupported<ONNXShrinkOp>(elementType);
-  Value operand = scalarOperands[0];
-  double biasLit = mlir::dyn_cast<ONNXShrinkOp>(op).getBias().convertToFloat();
-  double lambdLit =
-      mlir::dyn_cast<ONNXShrinkOp>(op).getLambd().convertToFloat();
-  MultiDialectBuilder<MathBuilder> create(rewriter, loc);
-  Value zero = create.math.constant(elementType, 0);
-  Value bias = create.math.constant(elementType, biasLit);
-  Value lambd = create.math.constant(elementType, lambdLit);
-  Value negLambd = create.math.sub(zero, lambd);
-  Value isLessThanNegLambd = create.math.slt(operand, negLambd);
-  Value isGreaterThanLambd = create.math.sgt(operand, lambd);
-  Value isInputSubBiasOrZero = create.math.select(
-      isGreaterThanLambd, create.math.sub(operand, bias), zero);
-  return create.math.select(
-      isLessThanNegLambd, create.math.add(operand, bias), isInputSubBiasOrZero);
-}
-
-//===----------------------------------------------------------------------===//
 // Scalar unary ops for lowering ONNXHardSigmoidOp
 //===----------------------------------------------------------------------===//
 template <>
@@ -742,51 +644,6 @@ Value emitScalarOpFor<ONNXHardSigmoidOp>(ConversionPatternRewriter &rewriter,
   Value clipLowest = create.math.max(add, zero);
   Value clipHighest = create.math.min(clipLowest, one);
   return clipHighest;
-}
-
-//===----------------------------------------------------------------------===//
-// Scalar unary ops for lowering ONNXHardSwishOp
-//===----------------------------------------------------------------------===//
-template <>
-struct ScalarOp<ONNXHardSwishOp> {
-  using FOp = CustomScalarOp;
-  using IOp = NotSuportedScalarOp;
-};
-
-template <>
-GenOpMix getGenOpMix<ONNXHardSwishOp>(Type t, Operation *op) {
-  return {{GenericOps::ArithmeticGop, 3}, {GenericOps::MulGop, 2}};
-}
-
-template <>
-Value emitScalarOpFor<ONNXHardSwishOp>(ConversionPatternRewriter &rewriter,
-    Location loc, Operation *op, Type elementType,
-    ArrayRef<Value> scalarOperands) {
-  // HardSwish(x) = x * max(0, min(1, (x / 6) + 0.5))
-  CheckIfCustomScalarOpIsSupported<ONNXHardSwishOp>(elementType);
-  Value operand = scalarOperands[0];
-
-  // Define constants: alpha = 1/6, beta = 0.5
-  MultiDialectBuilder<MathBuilder> create(rewriter, loc);
-  Value zero = create.math.constant(elementType, 0);
-  Value one = create.math.constant(elementType, 1);
-  Value alpha = create.math.constant(elementType, 1.0 / 6.0);
-  Value beta = create.math.constant(elementType, 0.5);
-
-  // Compute (x / 6) + 0.5
-  Value scaledX = create.math.mul(operand, alpha);
-  Value shiftedX = create.math.add(scaledX, beta);
-
-  // Apply min(1, shiftedX)
-  Value minOp = create.math.min(shiftedX, one);
-
-  // Apply max(0, minOp)
-  Value maxOp = create.math.max(minOp, zero);
-
-  // Compute final HardSwish: x * max(0, min(1, (x / 6) + 0.5))
-  Value result = create.math.mul(operand, maxOp);
-
-  return result;
 }
 
 //===----------------------------------------------------------------------===//
@@ -851,84 +708,6 @@ Value emitScalarOpFor<ONNXReluOp>(ConversionPatternRewriter &rewriter,
 }
 
 //===----------------------------------------------------------------------===//
-// Scalar unary ops for lowering ONNXCeLUOp
-//===----------------------------------------------------------------------===//
-
-template <>
-struct ScalarOp<ONNXCeluOp> {
-  using FOp = CustomScalarOp;
-  using IOp = CustomScalarOp;
-};
-
-template <>
-GenOpMix getGenOpMix<ONNXCeluOp>(Type t, Operation *op) {
-  return {{GenericOps::ArithmeticGop, 2}, {GenericOps::MulGop, 1},
-      {GenericOps::MinMaxGop, 2}, {GenericOps::ExpGop, 1},
-      {GenericOps::DivGop, 1}};
-}
-
-template <>
-// celu(x) = max(0, x) + min(0, alpha * (exp(x/alpha) - 1))
-Value emitScalarOpFor<ONNXCeluOp>(ConversionPatternRewriter &rewriter,
-    Location loc, Operation *op, Type elementType,
-    ArrayRef<Value> scalarOperands) {
-  CheckIfCustomScalarOpIsSupported<ONNXCeluOp>(elementType);
-  Value operand = scalarOperands[0];
-  MultiDialectBuilder<MathBuilder> create(rewriter, loc);
-
-  // Get the 'alpha' attribute from the Celu operation.
-  auto celuOp = cast<ONNXCeluOp>(op);
-
-  double alphaValue = celuOp.getAlpha().convertToDouble();
-
-  // Create constants for 0, 1, and alpha.
-  Value zero = create.math.constant(elementType, 0.0);
-  Value one = create.math.constant(elementType, 1.0);
-  Value alpha = create.math.constant(elementType, alphaValue);
-
-  // Compute positive part: max(0, x)
-  Value positivePart = create.math.max(zero, operand);
-
-  // Compute negative part: alpha * (exp(x / alpha) - 1)
-  Value xOverAlpha = create.math.div(operand, alpha);
-  Value expVal = create.math.exp(xOverAlpha);
-  Value expMinusOne = create.math.sub(expVal, one);
-  Value scaled = create.math.mul(alpha, expMinusOne);
-
-  // Combine parts: positivePart + min(0, scaled)
-  Value negativePart = create.math.min(zero, scaled);
-  return create.math.add(positivePart, negativePart);
-}
-
-//===----------------------------------------------------------------------===//
-// Scalar unary ops for lowering ONNXBitWiseNotOp
-//===----------------------------------------------------------------------===//
-
-template <>
-struct ScalarOp<ONNXBitwiseNotOp> {
-  using FOp = NotSuportedScalarOp;
-  using IOp = CustomScalarOp;
-};
-
-template <>
-GenOpMix getGenOpMix<ONNXBitwiseNotOp>(Type t, Operation *op) {
-  return {{GenericOps::ArithmeticGop, 1}};
-}
-
-template <>
-Value emitScalarOpFor<ONNXBitwiseNotOp>(ConversionPatternRewriter &rewriter,
-    Location loc, Operation *op, Type elementType,
-    ArrayRef<Value> scalarOperands) {
-
-  CheckIfCustomScalarOpIsSupported<ONNXBitwiseNotOp>(elementType);
-  Value operand = scalarOperands[0];
-  MultiDialectBuilder<MathBuilder> create(rewriter, loc);
-  // NOT(x) = XOR(x,-1)
-  Value one = create.math.constant(elementType, -1);
-  return create.math.xori(operand, one);
-}
-
-//===----------------------------------------------------------------------===//
 // Scalar unary ops for lowering ONNXLeakyReluOp
 //===----------------------------------------------------------------------===//
 template <>
@@ -961,6 +740,7 @@ Value emitScalarOpFor<ONNXLeakyReluOp>(ConversionPatternRewriter &rewriter,
   return create.math.select(
       lessThanZero, create.math.mul(alpha, operand), operand);
 }
+
 //===----------------------------------------------------------------------===//
 // Scalar unary ops for lowering ONNXPReluOp
 //===----------------------------------------------------------------------===//
@@ -989,36 +769,6 @@ Value emitScalarOpFor<ONNXPReluOp>(ConversionPatternRewriter &rewriter,
   Value lessThanZero = create.math.slt(operand, zero);
   return create.math.select(
       lessThanZero, create.math.mul(slope, operand), operand);
-}
-
-//===----------------------------------------------------------------------===//
-// Scalar unary ops for lowering ONNXThresholdedReluOp
-//===----------------------------------------------------------------------===//
-template <>
-struct ScalarOp<ONNXThresholdedReluOp> {
-  using FOp = CustomScalarOp;
-  using IOp = NotSuportedScalarOp;
-};
-
-template <>
-GenOpMix getGenOpMix<ONNXThresholdedReluOp>(Type t, Operation *op) {
-  return {{GenericOps::CompareGop, 1}, {GenericOps::SelectGop, 1}};
-}
-
-template <>
-Value emitScalarOpFor<ONNXThresholdedReluOp>(
-    ConversionPatternRewriter &rewriter, Location loc, Operation *op,
-    Type elementType, ArrayRef<Value> scalarOperands) {
-  // ONNXThresholdedRelu: y = (x > alpha) ? x : 0
-  CheckIfCustomScalarOpIsSupported<ONNXThresholdedReluOp>(elementType);
-  Value operand = scalarOperands[0];
-  double alphaLit =
-      mlir::dyn_cast<ONNXThresholdedReluOp>(op).getAlpha().convertToFloat();
-  MultiDialectBuilder<MathBuilder> create(rewriter, loc);
-  Value zero = create.math.constant(elementType, 0);
-  auto alpha = create.math.constant(elementType, alphaLit);
-  auto greaterThanAlpha = create.math.sgt(operand, alpha);
-  return create.math.select(greaterThanAlpha, operand, zero);
 }
 
 //===----------------------------------------------------------------------===//
@@ -1259,37 +1009,6 @@ Value emitScalarOpFor<ONNXMinOp>(ConversionPatternRewriter &rewriter,
 }
 
 //===----------------------------------------------------------------------===//
-// Scalar unary ops for lowering ONNXMishOp
-//===----------------------------------------------------------------------===//
-template <>
-struct ScalarOp<ONNXMishOp> {
-  using FOp = CustomScalarOp;
-  using IOp = NotSuportedScalarOp;
-};
-
-template <>
-GenOpMix getGenOpMix<ONNXMishOp>(Type t, Operation *op) {
-  return {{GenericOps::ExpGop, 1}, {GenericOps::ArithmeticGop, 1},
-      {GenericOps::LogGop, 1}, {GenericOps::MulGop, 1},
-      {GenericOps::TrigHyperbolicGop, 1}};
-}
-
-template <>
-Value emitScalarOpFor<ONNXMishOp>(ConversionPatternRewriter &rewriter,
-    Location loc, Operation *op, Type elementType,
-    ArrayRef<Value> scalarOperands) {
-  // ONNXMishOp(%X) = x * tanh(ln(1 + e^{x}))
-  CheckIfCustomScalarOpIsSupported<ONNXMishOp>(elementType);
-  Value operand = scalarOperands[0];
-  MultiDialectBuilder<MathBuilder> create(rewriter, loc);
-  Value exp = create.math.exp(operand);
-  Value one = create.math.constant(elementType, 1);
-  Value softplusX = create.math.log(create.math.add(exp, one));
-  Value tanHSoftplusX = create.math.tanh(softplusX);
-  return create.math.mul(operand, tanHSoftplusX);
-}
-
-//===----------------------------------------------------------------------===//
 // Scalar unary ops for lowering ONNXNegOp
 //===----------------------------------------------------------------------===//
 template <>
@@ -1311,33 +1030,6 @@ Value emitScalarOpFor<ONNXNegOp>(ConversionPatternRewriter &rewriter,
   Value operand = scalarOperands[0];
   MultiDialectBuilder<MathBuilder> create(rewriter, loc);
   return create.math.neg(operand);
-}
-
-//===----------------------------------------------------------------------===//
-// Scalar binary ops for lowering ONNXPowOp
-//===----------------------------------------------------------------------===//
-
-template <>
-struct ScalarOp<ONNXPowOp> {
-  using FOp = CustomScalarOp;
-  using IOp = CustomScalarOp;
-};
-
-template <>
-GenOpMix getGenOpMix<ONNXPowOp>(Type t, Operation *op) {
-  return {{GenericOps::PowGop, 1}};
-}
-
-template <>
-Value emitScalarOpFor<ONNXPowOp>(ConversionPatternRewriter &rewriter,
-    Location loc, Operation *op, Type elementType,
-    ArrayRef<Value> scalarOperands) {
-  CheckIfCustomScalarOpIsSupported<ONNXPowOp>(elementType);
-  Value lhs = scalarOperands[0];
-  Value rhs = scalarOperands[1];
-  MultiDialectBuilder<MathBuilder> create(rewriter, loc);
-  // Cover the float ^ float, int ^ int, float ^ int cases.
-  return create.math.pow(lhs, rhs);
 }
 
 //===----------------------------------------------------------------------===//
@@ -2017,23 +1709,21 @@ bool OpFusionHelper::checkFusibleOp(Operation *useOp, Operation *defOp,
 
   return enqueueFusibleOp<
       // Unary Op
-      mlir::ONNXAbsOp, mlir::ONNXAtanOp, mlir::ONNXBinarizerOp,
-      mlir::ONNXCastOp, mlir::ONNXCeilOp, mlir::ONNXCosOp, mlir::ONNXCoshOp,
-      mlir::ONNXDequantizeLinearOp, mlir::ONNXCeluOp, mlir::ONNXEluOp,
-      mlir::ONNXErfOp, mlir::ONNXAcosOp, mlir::ONNXAcoshOp, mlir::ONNXAsinOp,
-      mlir::ONNXAsinhOp, mlir::ONNXAtanhOp, mlir::ONNXExpOp, mlir::ONNXFloorOp,
-      mlir::ONNXGeluOp, mlir::ONNXBitwiseNotOp, mlir::ONNXHardSigmoidOp,
-      mlir::ONNXHardSwishOp, mlir::ONNXIsInfOp, mlir::ONNXIsNaNOp,
-      mlir::ONNXLeakyReluOp, mlir::ONNXLogOp, mlir::ONNXMishOp, mlir::ONNXNegOp,
-      mlir::ONNXNotOp, mlir::ONNXReciprocalOp, mlir::ONNXReluOp,
-      mlir::ONNXRoundOp, mlir::ONNXSeluOp, mlir::ONNXShrinkOp,
+      mlir::ONNXAbsOp, mlir::ONNXAtanOp, mlir::ONNXCastOp, mlir::ONNXCeilOp,
+      mlir::ONNXCosOp, mlir::ONNXCoshOp, mlir::ONNXDequantizeLinearOp,
+      mlir::ONNXEluOp, mlir::ONNXErfOp, mlir::ONNXAcosOp, mlir::ONNXAcoshOp,
+      mlir::ONNXAsinOp, mlir::ONNXAsinhOp, mlir::ONNXAtanhOp, mlir::ONNXExpOp,
+      mlir::ONNXFloorOp, mlir::ONNXGeluOp, mlir::ONNXHardSigmoidOp,
+      mlir::ONNXIsInfOp, mlir::ONNXIsNaNOp, mlir::ONNXLeakyReluOp,
+      mlir::ONNXLogOp, mlir::ONNXNegOp, mlir::ONNXNotOp, mlir::ONNXReciprocalOp,
+      mlir::ONNXReluOp, mlir::ONNXRoundOp, mlir::ONNXSeluOp,
       mlir::ONNXSigmoidOp, mlir::ONNXSignOp, mlir::ONNXSinOp, mlir::ONNXSinhOp,
       mlir::ONNXSoftplusOp, mlir::ONNXSoftsignOp, mlir::ONNXSqrtOp,
-      mlir::ONNXTanOp, mlir::ONNXTanhOp, mlir::ONNXThresholdedReluOp,
+      mlir::ONNXTanOp, mlir::ONNXTanhOp,
       // Binary Op
-      mlir::ONNXBitShiftOp, mlir::ONNXEqualOp, mlir::ONNXGreaterOp,
-      mlir::ONNXGreaterOrEqualOp, mlir::ONNXLessOp, mlir::ONNXLessOrEqualOp,
-      mlir::ONNXModOp, mlir::ONNXPowOp,
+      mlir::ONNXEqualOp, mlir::ONNXGreaterOp, mlir::ONNXGreaterOrEqualOp,
+      mlir::ONNXLessOp, mlir::ONNXLessOrEqualOp, mlir::ONNXModOp,
+      mlir::ONNXPowOp,
       // Variadic Op
       mlir::ONNXAddOp, mlir::ONNXAndOp, mlir::ONNXDivOp, mlir::ONNXMaxOp,
       mlir::ONNXMeanOp, mlir::ONNXMinOp, mlir::ONNXMulOp, mlir::ONNXOrOp,
@@ -2205,15 +1895,9 @@ Value OpFusionHelper::emitFuseOps(
     // getRemappedValue is needed for load op.
     SmallVector<Value, 4> useOperands;
     for (auto oper : useOp->getOperands()) {
-      if (oper.getDefiningOp() != defOp) {
+      if (oper.getDefiningOp() != defOp)
         useOperands.emplace_back(rewriter.getRemappedValue(oper));
-        Operation *constOp = oper.getDefiningOp<ONNXConstantOp>();
-        if (constOp && defOp->isBeforeInBlock(constOp)) {
-          // Move the constant op to be before the root op so that the IR is
-          // valid.
-          constOp->moveBefore(defOp);
-        }
-      } else {
+      else
         // Due to the op fusion, we will not generate a tensor for the current
         // oper, but only the scalar result from defOp.
         // This scalar value cannot be used to initialize ShapeHelper.
@@ -2232,7 +1916,6 @@ Value OpFusionHelper::emitFuseOps(
         // dynamic dim to be fused in the previous implementation. Therefore,
         // alloc is used for all the fused op.
         useOperands.emplace_back(alloc);
-      }
     }
     // Use shape helper to generate load index
     ONNXBroadcastOpShapeHelper shapeHelper(
@@ -2368,9 +2051,9 @@ struct ONNXElementwiseUnaryOpLowering
       int64_t simdLoopStaticTripCount;
       bool simdOnly, canOverCompute = true;
       GenOpMix mix = getGenOpMix<ElementwiseUnaryOp>(outputElementType, op);
-      int64_t totVL = computeSuitableSimdUnrollFactor(outputMemRefType,
-          collapsedInnermostLoops, mix, canOverCompute, simdLoopStaticTripCount,
-          simdOnly);
+      int64_t totVL =
+          computeSuitableUnrollFactor(outputMemRefType, collapsedInnermostLoops,
+              mix, canOverCompute, simdLoopStaticTripCount, simdOnly);
       if (totVL > 1) {
         onnxToKrnlSimdReport(op, /*successful*/ true, totVL,
             simdLoopStaticTripCount, "unary fully flattened");
@@ -2547,9 +2230,9 @@ struct ONNXElementwiseBinaryOpLowering
       int64_t simdLoopStaticTripCount;
       bool simdOnly, canOverCompute = collapsedInnermostLoops == outputRank;
       GenOpMix mix = getGenOpMix<ElementwiseBinaryOp>(outputElementType, op);
-      int64_t totVL = computeSuitableSimdUnrollFactor(outputMemRefType,
-          collapsedInnermostLoops, mix, canOverCompute, simdLoopStaticTripCount,
-          simdOnly);
+      int64_t totVL =
+          computeSuitableUnrollFactor(outputMemRefType, collapsedInnermostLoops,
+              mix, canOverCompute, simdLoopStaticTripCount, simdOnly);
       if (totVL > 1) {
         if (collapsedInnermostLoops == outputRank)
           onnxToKrnlSimdReport(op, /*successful*/ true, totVL,
@@ -2723,9 +2406,9 @@ struct ONNXElementwiseVariadicOpLowering
       int64_t simdLoopStaticTripCount;
       bool simdOnly, canOverCompute = collapsedInnermostLoops == outputRank;
       GenOpMix mix = getGenOpMix<ElementwiseVariadicOp>(outputElementType, op);
-      int64_t totVL = computeSuitableSimdUnrollFactor(outputMemRefType,
-          collapsedInnermostLoops, mix, canOverCompute, simdLoopStaticTripCount,
-          simdOnly);
+      int64_t totVL =
+          computeSuitableUnrollFactor(outputMemRefType, collapsedInnermostLoops,
+              mix, canOverCompute, simdLoopStaticTripCount, simdOnly);
       if (totVL > 1) {
         if (collapsedInnermostLoops == outputRank)
           onnxToKrnlSimdReport(op, /*successful*/ true, totVL,
@@ -2968,15 +2651,11 @@ void populateLoweringONNXElementwiseOpPattern(RewritePatternSet &patterns,
       ONNXElementwiseVariadicOpLowering<mlir::ONNXAddOp>,
       ONNXElementwiseVariadicOpLowering<mlir::ONNXAndOp>,
       ONNXElementwiseUnaryOpLowering<mlir::ONNXAtanOp>,
-      ONNXElementwiseUnaryOpLowering<mlir::ONNXBinarizerOp>,
-      ONNXElementwiseBinaryOpLowering<mlir::ONNXBitShiftOp>,
       ONNXElementwiseBinaryOpLowering<mlir::ONNXBitwiseAndOp>,
       ONNXElementwiseBinaryOpLowering<mlir::ONNXBitwiseOrOp>,
       ONNXElementwiseBinaryOpLowering<mlir::ONNXBitwiseXorOp>,
-      ONNXElementwiseUnaryOpLowering<mlir::ONNXBitwiseNotOp>,
       ONNXElementwiseUnaryOpLowering<mlir::ONNXCastOp>,
       ONNXElementwiseUnaryOpLowering<mlir::ONNXCeilOp>,
-      ONNXElementwiseUnaryOpLowering<mlir::ONNXCeluOp>,
       ONNXElementwiseUnaryOpLowering<mlir::ONNXCosOp>,
       ONNXElementwiseUnaryOpLowering<mlir::ONNXCoshOp>,
       ONNXElementwiseUnaryOpLowering<mlir::ONNXDequantizeLinearOp>,
@@ -2995,7 +2674,6 @@ void populateLoweringONNXElementwiseOpPattern(RewritePatternSet &patterns,
       ONNXElementwiseBinaryOpLowering<mlir::ONNXGreaterOp>,
       ONNXElementwiseBinaryOpLowering<mlir::ONNXGreaterOrEqualOp>,
       ONNXElementwiseUnaryOpLowering<mlir::ONNXHardSigmoidOp>,
-      ONNXElementwiseUnaryOpLowering<mlir::ONNXHardSwishOp>,
       ONNXElementwiseUnaryOpLowering<mlir::ONNXIsInfOp>,
       ONNXElementwiseUnaryOpLowering<mlir::ONNXIsNaNOp>,
       ONNXElementwiseUnaryOpLowering<mlir::ONNXLeakyReluOp>,
@@ -3005,7 +2683,6 @@ void populateLoweringONNXElementwiseOpPattern(RewritePatternSet &patterns,
       ONNXElementwiseVariadicOpLowering<mlir::ONNXMaxOp>,
       ONNXElementwiseVariadicOpLowering<mlir::ONNXMeanOp>,
       ONNXElementwiseVariadicOpLowering<mlir::ONNXMinOp>,
-      ONNXElementwiseUnaryOpLowering<mlir::ONNXMishOp>,
       ONNXElementwiseBinaryOpLowering<mlir::ONNXModOp>,
       ONNXElementwiseVariadicOpLowering<mlir::ONNXMulOp>,
       ONNXElementwiseUnaryOpLowering<mlir::ONNXNegOp>,
@@ -3017,7 +2694,6 @@ void populateLoweringONNXElementwiseOpPattern(RewritePatternSet &patterns,
       ONNXElementwiseUnaryOpLowering<mlir::ONNXRoundOp>,
       ONNXElementwiseUnaryOpLowering<mlir::ONNXClipOp>,
       ONNXElementwiseUnaryOpLowering<mlir::ONNXSeluOp>,
-      ONNXElementwiseUnaryOpLowering<mlir::ONNXShrinkOp>,
       ONNXElementwiseUnaryOpLowering<mlir::ONNXSigmoidOp>,
       ONNXElementwiseUnaryOpLowering<mlir::ONNXSignOp>,
       ONNXElementwiseUnaryOpLowering<mlir::ONNXSinOp>,
@@ -3028,9 +2704,8 @@ void populateLoweringONNXElementwiseOpPattern(RewritePatternSet &patterns,
       ONNXElementwiseVariadicOpLowering<mlir::ONNXSubOp>,
       ONNXElementwiseVariadicOpLowering<mlir::ONNXSumOp>,
       ONNXElementwiseUnaryOpLowering<mlir::ONNXTanOp>,
-      ONNXElementwiseUnaryOpLowering<mlir::ONNXTanhOp>,
-      ONNXElementwiseUnaryOpLowering<mlir::ONNXThresholdedReluOp>,
-      ONNXWhereOpLowering, ONNXElementwiseVariadicOpLowering<mlir::ONNXXorOp>>(
+      ONNXElementwiseUnaryOpLowering<mlir::ONNXTanhOp>, ONNXWhereOpLowering,
+      ONNXElementwiseVariadicOpLowering<mlir::ONNXXorOp>>(
       typeConverter, ctx, dimAnalysis, enableSIMD, enableParallel);
   patterns.insert<ONNXElementwiseBinaryOpLowering<mlir::ONNXPReluOp>>(
       typeConverter, ctx, dimAnalysis, enableSIMD, /*isUniBroadcasting=*/true,

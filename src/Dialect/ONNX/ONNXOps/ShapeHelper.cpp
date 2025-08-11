@@ -113,20 +113,17 @@ static void refineDims(Operation *op, DimsExpr &inferredDims, Value output) {
     // inferredDim is different from existingDim. Believe in existingDim.
     assert(inferredDims[i].isLiteral() && "isLiteral failed");
     if (existingDims[i] != inferredDims[i].getLiteral()) {
-      if (op) {
-        llvm::outs() << "\nWarning for operation " << op->getName()
+      if (op)
+        llvm::outs() << "Warning for operation " << op->getName()
                      << ": [Shape inference, dim " << i
                      << "] the inferred dim (" << inferredDims[i].getLiteral()
                      << ") is different from the existing dim ("
-                     << existingDims[i]
-                     << "). Use the existing dim instead.\n\n";
-      } else {
-        llvm::outs() << "\nWarning: [Shape inference, dim " << i
+                     << existingDims[i] << "). Use the existing dim instead.\n";
+      else
+        llvm::outs() << "Warning: [Shape inference, dim " << i
                      << "] the inferred dim (" << inferredDims[i].getLiteral()
                      << ") is different from the existing dim ("
-                     << existingDims[i]
-                     << "). Use the existing dim instead.\n\n";
-      }
+                     << existingDims[i] << "). Use the existing dim instead.\n";
       inferredDims[i] = LitIE(existingDims[i]);
     }
   }
@@ -287,11 +284,6 @@ LogicalResult ONNXBroadcastOpShapeHelper::customComputeShape(
   // A temporary IndexExpr vector for the output.
   DimsExpr dimsExpr;
   uint64_t numOfInputs = initialOperands.size();
-
-  if (!llvm::all_of(initialOperands,
-          [](Value initalOperand) { return hasShapeAndRank(initalOperand); })) {
-    return failure();
-  }
 
   // Compute rank of the output. Rank of the output is the maximum rank of all
   // initial operands.

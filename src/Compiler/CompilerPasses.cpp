@@ -44,18 +44,6 @@ using namespace mlir;
 namespace onnx_mlir {
 
 void configurePasses() {
-  // Handle deprecated mcpu.
-  if (!mcpu.empty()) {
-    if (!march.empty()) {
-      llvm::outs() << "\nWarning: Got values for both --march and --mcpu, "
-                      "ignore --mcpu. "
-                      "Please remove deprecated --mcpu in the near future.\n\n";
-    } else {
-      llvm::outs()
-          << "\nWarning: Got deprecated --mcpu option. Please switch to "
-             "--march in the near future.\n\n";
-    }
-  }
   // Set global vector machine support.
   VectorMachineSupport::setGlobalVectorMachineSupport(march, mcpu, "");
   configureConstPropONNXToONNXPass(onnxConstPropRoundFPToInt,
@@ -66,8 +54,7 @@ void configurePasses() {
       !disableSimdOption);
 }
 
-void addONNXToMLIRPasses(mlir::PassManager &pm, bool targetCPU,
-    bool donotScrubDisposableElementsAttr) {
+void addONNXToMLIRPasses(mlir::PassManager &pm, bool targetCPU) {
   // This is a transition from previous static passes to full dynamic passes
   // Static passes are kept and the dynamic pass is added as IF-THEN
   // with the static iteration.
@@ -79,9 +66,8 @@ void addONNXToMLIRPasses(mlir::PassManager &pm, bool targetCPU,
   // In future, only the dynamic pass, ONNXOpTransformPass, will be used for
   // this function.
 
-  if (!donotScrubDisposableElementsAttr)
-    pm.addInstrumentation(
-        std::make_unique<DisposableGarbageCollector>(pm.getContext()));
+  pm.addInstrumentation(
+      std::make_unique<DisposableGarbageCollector>(pm.getContext()));
 
   // Decompose first. Eliminates some unsupported ops without shape inference.
   pm.addNestedPass<func::FuncOp>(onnx_mlir::createDecomposeONNXToONNXPass());
@@ -146,8 +132,7 @@ void addONNXToMLIRPasses(mlir::PassManager &pm, bool targetCPU,
   pm.addPass(mlir::createSymbolDCEPass());
 
   // Replace every DisposableElementsAttr with DenseElementsAttr.
-  if (!donotScrubDisposableElementsAttr)
-    pm.addPass(createScrubDisposablePass());
+  pm.addPass(createScrubDisposablePass());
 
   // Set onnx_node_name if it is missing. Keep this pass at the end of this
   // function and just before instrumentation.
@@ -169,16 +154,10 @@ void addONNXToMLIRPasses(mlir::PassManager &pm, bool targetCPU,
   if (instrumentStage == onnx_mlir::InstrumentStages::Onnx)
     pm.addNestedPass<func::FuncOp>(
         onnx_mlir::createInstrumentPass(instrumentOps, instrumentActions));
-  // Print Signatures of each op at runtime if enabled. Should not run
-  // signature and instrument passes at the same time as time may include printf
-  // overheads.
-  if (instrumentSignatures != "NONE" || instrumentOnnxNode != "NONE")
-    pm.addNestedPass<func::FuncOp>(onnx_mlir::createInstrumentONNXSignaturePass(
-        instrumentSignatures, instrumentOnnxNode));
 }
 
 void addONNXToKrnlPasses(mlir::PassManager &pm, int optLevel, bool enableCSE,
-    std::string ONNXOpsStatFormat) {
+    std::string instrumentSignatureString, std::string ONNXOpsStatFormat) {
   if (enableCSE)
     // Eliminate common sub-expressions before lowering to Krnl.
     // TODO: enable this by default when we make sure it works flawlessly.
@@ -202,6 +181,12 @@ void addONNXToKrnlPasses(mlir::PassManager &pm, int optLevel, bool enableCSE,
     }
   }
 
+  // Print Signatures of each op at runtime if enabled. Should not run
+  // signature and instrument passes at the same time as time may include printf
+  // overheads.
+  if (instrumentSignatureString != "NONE")
+    pm.addNestedPass<func::FuncOp>(onnx_mlir::createInstrumentONNXSignaturePass(
+        instrumentSignatureString));
   pm.addPass(onnx_mlir::createLowerToKrnlPass(/*enableTiling*/ optLevel >= 3,
       /*enableSIMD*/ optLevel >= 3 && !disableSimdOption, enableParallel,
       /*enableFastMath*/ optLevel >= 3 && enableFastMathOption,
@@ -214,7 +199,7 @@ void addONNXToKrnlPasses(mlir::PassManager &pm, int optLevel, bool enableCSE,
 
 void addKrnlToAffinePasses(mlir::PassManager &pm) {
   pm.addNestedPass<func::FuncOp>(
-      onnx_mlir::krnl::createConvertKrnlToAffinePass(enableParallel));
+      onnx_mlir::krnl::createConvertKrnlToAffinePass());
 }
 
 void addKrnlToLLVMPasses(
@@ -251,14 +236,18 @@ void addKrnlToLLVMPasses(
   // Currently this has to be done *after* lowering the affine dialect because
   // operations in that dialect do not conform to the requirements explained
   // in https://mlir.llvm.org/docs/BufferDeallocationInternals.
-  bufferization::BufferDeallocationPipelineOptions bufferDeallocOptions;
-  mlir::bufferization::buildBufferDeallocationPipeline(
-      pm, bufferDeallocOptions);
-  pm.addPass(mlir::createConvertBufferizationToMemRefPass());
+  if (useOldBufferization) {
+    pm.addNestedPass<func::FuncOp>(
+        mlir::bufferization::createBufferDeallocationPass());
+  } else {
+    bufferization::BufferDeallocationPipelineOptions bufferDeallocOptions;
+    mlir::bufferization::buildBufferDeallocationPipeline(
+        pm, bufferDeallocOptions);
+    pm.addPass(mlir::createBufferizationToMemRefPass());
+  }
 
   // Late introduction of OpenMP, after bufferization.
   if (enableParallel) {
-    // Cannot have canonicalization before OpenMP... have seen loop disappear.
     pm.addPass(mlir::createConvertSCFToOpenMPPass());
     //  The alloca_scope ops are somewhat fragile; canonicalize remove them when
     //  redundant, which helps reliability of the compilation of these ops.
@@ -272,10 +261,6 @@ void addKrnlToLLVMPasses(
   // pm.addNestedPass<func::FuncOp>(krnl::createConvertSeqToMemrefPass());
 
   pm.addPass(mlir::memref::createFoldMemRefAliasOpsPass());
-
-  if (profileIR)
-    pm.addNestedPass<func::FuncOp>(onnx_mlir::createInstrumentCleanupPass());
-
   if (enableBoundCheck)
     pm.addPass(mlir::createGenerateRuntimeVerificationPass());
   pm.addPass(krnl::createConvertKrnlToLLVMPass(verifyInputTensors,
@@ -321,8 +306,8 @@ void addPasses(mlir::OwningOpRef<ModuleOp> &module, mlir::PassManager &pm,
 
   if (emissionTarget >= EmitMLIR) {
     if (inputIRLevel <= ONNXLevel)
-      addONNXToKrnlPasses(
-          pm, OptimizationLevel, /*enableCSE*/ true, ONNXOpStats);
+      addONNXToKrnlPasses(pm, OptimizationLevel, /*enableCSE*/ true,
+          instrumentSignatures, ONNXOpStats);
     if (inputIRLevel <= MLIRLevel)
       addKrnlToAffinePasses(pm);
   }

@@ -43,11 +43,6 @@ class HasRankOf<int rank> :
 def GetSqrtResultBatchNormA :
       NativeCodeCall<"getSqrtResultBatchNormA($_loc, $_builder, $0, $1)">;
 
-// Return a tensor type whose shape is from the 1st operand and element type is
-// from the 2nd operand.
-def GetShapeAndElemType: NativeCodeCall<
- "RankedTensorType::get(getShape($0.getType()), getElementType($1.getType()))">;
-
 //===----------------------------------------------------------------------===//
 // Rewrite
 //
@@ -92,10 +87,19 @@ def replaceONNXBatchNormalizationInferenceModePattern : Pattern<
 // 2. `ONNXAddOp %X, %constant` will be replaced by
 //       `ONNXAddOp %X, (ONNXExpandOp %constant, (ONNXShapeOp %X))`
 //
-// Case 2 is now performed explicitly in class ExpandAddConstantPattern and
-// function processAddOnlyCase which is only called when processMatMulAddCase
-// fails. It is thus removed from the td rules below.
+//
 //===----------------------------------------------------------------------===//
+
+
+// Create an ONNX Shape Op with type
+def CreateShapeOp: NativeCodeCall<
+  "$_builder.create<mlir::ONNXShapeOp>($_loc, $0, $1, IntegerAttr(), 0)"
+>;
+
+// Get a type for a tensor that stores the shape of another tensor.
+def GetShapeTypeOf: NativeCodeCall<
+  "RankedTensorType::get({mlir::cast<ShapedType>($0.getType()).getRank()}, $_builder.getIntegerType(64))"
+>;
 
 // Check unidirectional broadcasting from the first to second tensor.
 def IsUniBroadcastingFromFirstToSecond: Constraint<
@@ -107,10 +111,17 @@ def IsUniBroadcastingFromFirstToSecond: Constraint<
 // For ONNXAddOp
 //===----------------------------------------------------------------------===//
 
-// Normalize "const + x to "x + const".
 def expandConstantOperandForAddOp1: Pat<
-  (ONNXAddOp:$a (ONNXConstantOp:$c $_, $_, $_, $_, $_, $_, $_, $_), $x),
+  (ONNXAddOp (ONNXConstantOp:$c $_, $_, $_, $_, $_, $_, $_, $_), $x),
   (ONNXAddOp $x, $c),
+  [(IsUniBroadcastingFromFirstToSecond $c, $x)]
+>;
+
+def expandConstantOperandForAddOp2: Pat<
+  (ONNXAddOp $x, (ONNXConstantOp:$c $_, $_, $_, $_, $_, $_, $_, $_)),
+  (ONNXAddOp $x, (ONNXExpandOp $c,
+                               (CreateShapeOp (GetShapeTypeOf $x), $x),
+                               (returnType $x))),
   [(IsUniBroadcastingFromFirstToSecond $c, $x)]
 >;
 
@@ -121,7 +132,7 @@ def expandConstantOperandForAddOp1: Pat<
 def expandConstantOperandForDivOp1: Pat<
   (ONNXDivOp $x, (ONNXConstantOp:$c $_, $_, $_, $_, $_, $_, $_, $_)),
   (ONNXDivOp $x, (ONNXExpandOp $c,
-                               (CreateShapeOp $x),
+                               (CreateShapeOp (GetShapeTypeOf $x), $x),
                                (returnType $x))),
   [(IsUniBroadcastingFromFirstToSecond $c, $x)]
 >;
@@ -129,7 +140,7 @@ def expandConstantOperandForDivOp1: Pat<
 def expandConstantOperandForDivOp2: Pat<
   (ONNXDivOp (ONNXConstantOp:$c $_, $_, $_, $_, $_, $_, $_, $_), $x),
   (ONNXDivOp (ONNXExpandOp $c,
-                           (CreateShapeOp $x),
+                           (CreateShapeOp (GetShapeTypeOf $x), $x),
                            (returnType $x)),
              $x),
   [(IsUniBroadcastingFromFirstToSecond $c, $x)]
@@ -148,7 +159,7 @@ def expandConstantOperandForMulOp1: Pat<
 def expandConstantOperandForMulOp2: Pat<
   (ONNXMulOp $x, (ONNXConstantOp:$c $_, $_, $_, $_, $_, $_, $_, $_)),
   (ONNXMulOp $x, (ONNXExpandOp $c,
-                               (CreateShapeOp $x),
+                               (CreateShapeOp (GetShapeTypeOf $x), $x),
                                (returnType $x))),
   [(IsUniBroadcastingFromFirstToSecond $c, $x)]
 >;
@@ -160,7 +171,7 @@ def expandConstantOperandForMulOp2: Pat<
 def expandConstantOperandForSubOp1: Pat<
   (ONNXSubOp $x, (ONNXConstantOp:$c $_, $_, $_, $_, $_, $_, $_, $_)),
   (ONNXSubOp $x, (ONNXExpandOp $c,
-                               (CreateShapeOp $x),
+                               (CreateShapeOp (GetShapeTypeOf $x), $x),
                                (returnType $x))),
   [(IsUniBroadcastingFromFirstToSecond $c, $x)]
 >;
@@ -168,7 +179,7 @@ def expandConstantOperandForSubOp1: Pat<
 def expandConstantOperandForSubOp2: Pat<
   (ONNXSubOp (ONNXConstantOp:$c $_, $_, $_, $_, $_, $_, $_, $_), $x),
   (ONNXSubOp (ONNXExpandOp $c,
-                           (CreateShapeOp $x),
+                           (CreateShapeOp (GetShapeTypeOf $x), $x),
                            (returnType $x)),
              $x),
   [(IsUniBroadcastingFromFirstToSecond $c, $x)]
@@ -224,140 +235,6 @@ def rewriteMatMulNDto3D_Broadcast_2: Pat<
 >;
 
 //===----------------------------------------------------------------------===//
-// Rules to turn ONNXQLinearMatMulOp with N-D inputs into the one with 3-D inputs.
-//===----------------------------------------------------------------------===//
-
-// Rewrite QLinearMatMul where N-dimension inputs are reshaped to 3-dimension
-// ones. Start rewriting from a DequantizeLinear operation and hoist Reshape
-// operations out of the pattern QuantizeLinear-QLinearMatMul-DequantizeLinear
-// so that if there is any optimization for the pattern, it is easy to be
-// applied.
-// In other words, the result pattern would look like:
-//
-// ```
-// A_3D   = ReshapeTo3D A_ND
-// B_3D   = ReshapeTo3D B_ND
-// QA_3D  = Quantize (A_3D)
-// QB_3D  = Quantize (B_3D)
-// QY_3D  = QLinearMatMul QA_3D, QB_3D
-// Y_3D   = Dequantize QY_3D
-// Y_ND   = ReshapeToND Y_3D
-// ```
-//
-// instead of
-//
-// ```
-// QA_ND  = Quantize (A_ND)
-// QB_ND  = Quantize (B_ND)
-// QA_3D  = ReshapeTo3D QA_ND
-// QB_3D  = ReshapeTo3D QB_ND
-// QY_3D  = QLinearMatMul QA_3D, QB_3D
-// QY_ND  = ReshapeToND QY_3D
-// Y_3D   = Dequantize QY_ND
-// ```
-//
-def rewriteQLinearMatMulNDto3D_NonBroadcast: Pattern<
-  (ONNXDequantizeLinearOp:$y_nd
-    (ONNXQLinearMatMulOp:$qy_nd
-      (ONNXQuantizeLinearOp:$qa_nd $a_nd, $a_scale, $a_zeropoint, $a_axis, $a_saturate), $_, $_,
-      (ONNXQuantizeLinearOp:$qb_nd $b_nd, $b_scale, $b_zeropoint, $b_axis, $b_saturate), $_, $_,
-      $_, $_),
-    $y_scale, $y_zeropoint, $y_axis),
-  [
-  // Reshape A to 3D and do quantization.
-  (ReshapeTo3D:$a_3d $a_nd),
-  (ONNXQuantizeLinearOp:$qa_3d
-    $a_3d, $a_scale, $a_zeropoint, $a_axis, $a_saturate,
-    (returnType (GetShapeAndElemType $a_3d, $qa_nd))),
-
-  // Reshape B to 3D and do quantization.
-  (ReshapeTo3D:$b_3d $b_nd),
-  (ONNXQuantizeLinearOp:$qb_3d
-    $b_3d, $b_scale, $b_zeropoint, $b_axis, $b_saturate,
-    (returnType (GetShapeAndElemType $b_3d, $qb_nd))),
-
-  // Call QLinearMatMul on 3D inputs.
-  (ONNXQLinearMatMulOp:$qy_3d
-     $qa_3d, $a_scale, $a_zeropoint,
-     $qb_3d, $b_scale, $b_zeropoint,
-     $y_scale, $y_zeropoint,
-     (returnType (GetMatMulResultType $qa_3d, $qb_3d))),
-
-  // Dequantize the 3D output.
-  (ONNXDequantizeLinearOp:$y_3d $qy_3d, $y_scale, $y_zeropoint, $y_axis,
-    (returnType (GetShapeAndElemType $qy_3d, $y_nd))),
-
-  // Reshape the output back to ND.
-  (ONNXReshapeOp $y_3d, (GetMatMulResultShape $a_nd, $b_nd), (GetZeroI64Attr))
-  ],
-  [(HasRankGT<3> $a_nd), (HasRankGT<3> $b_nd)]
->;
-
-// A is ND, B is 2D.
-def rewriteQLinearMatMulNDto3D_Broadcast1: Pattern<
-  (ONNXDequantizeLinearOp:$y_nd
-    (ONNXQLinearMatMulOp:$qy_nd
-      (ONNXQuantizeLinearOp:$qa_nd $a_nd, $a_scale, $a_zeropoint, $a_axis, $a_saturate), $_, $_,
-      $qb, $b_scale, $b_zeropoint,
-      $_, $_),
-    $y_scale, $y_zeropoint, $y_axis),
-  [
-  // Reshape A to 3D and do quantization.
-  (ReshapeTo3D:$a_3d $a_nd),
-  (ONNXQuantizeLinearOp:$qa_3d
-    $a_3d, $a_scale, $a_zeropoint, $a_axis, $a_saturate,
-    (returnType (GetShapeAndElemType $a_3d, $qa_nd))),
-
-  // Call QLinearMatMul on 3D inputs.
-  (ONNXQLinearMatMulOp:$qy_3d
-     $qa_3d, $a_scale, $a_zeropoint,
-     $qb, $b_scale, $b_zeropoint, // Keep B unchanged.
-     $y_scale, $y_zeropoint,
-     (returnType (GetMatMulResultType $qa_3d, $qb))),
-
-  // Dequantize the 3D output.
-  (ONNXDequantizeLinearOp:$y_3d $qy_3d, $y_scale, $y_zeropoint, $y_axis,
-    (returnType (GetShapeAndElemType $qy_3d, $y_nd))),
-
-  // Reshape the output back to ND.
-  (ONNXReshapeOp $y_3d, (GetMatMulResultShape $a_nd, $qb), (GetZeroI64Attr))
-  ],
-  [(HasRankGT<3> $a_nd), (HasRankOf<2> $qb)]
->;
-
-// A is 2D, B is ND.
-def rewriteQLinearMatMulNDto3D_Broadcast2: Pattern<
-  (ONNXDequantizeLinearOp:$y_nd
-    (ONNXQLinearMatMulOp:$qy_nd
-      $qa, $a_scale, $a_zeropoint,
-      (ONNXQuantizeLinearOp:$qb_nd $b_nd, $b_scale, $b_zeropoint, $b_axis, $b_saturate), $_, $_,
-      $_, $_),
-    $y_scale, $y_zeropoint, $y_axis),
-  [
-  // Reshape B to 3D and do quantization.
-  (ReshapeTo3D:$b_3d $b_nd),
-  (ONNXQuantizeLinearOp:$qb_3d
-    $b_3d, $b_scale, $b_zeropoint, $b_axis, $b_saturate,
-    (returnType (GetShapeAndElemType $b_3d, $qb_nd))),
-
-  // Call QLinearMatMul on 3D inputs.
-  (ONNXQLinearMatMulOp:$qy_3d
-     $qa, $a_scale, $a_zeropoint, // Keep A unchanged.
-     $qb_3d, $b_scale, $b_zeropoint,
-     $y_scale, $y_zeropoint,
-     (returnType (GetMatMulResultType $qa, $qb_3d))),
-
-  // Dequantize the 3D output.
-  (ONNXDequantizeLinearOp:$y_3d $qy_3d, $y_scale, $y_zeropoint, $y_axis,
-    (returnType (GetShapeAndElemType $qy_3d, $y_nd))),
-
-  // Reshape the output back to ND.
-  (ONNXReshapeOp $y_3d, (GetMatMulResultShape $qa, $b_nd), (GetZeroI64Attr))
-  ],
-  [(HasRankOf<2> $qa), (HasRankGT<3> $b_nd)]
->;
-
-//===----------------------------------------------------------------------===//
 // Rules to turn ONNXSoftmaxOp with N-D inputs into the one with 2-D inputs.
 //===----------------------------------------------------------------------===//
 
@@ -373,7 +250,7 @@ def rewriteSoftmaxNDto3D: Pat<
                     (ReshapeTo3D:$r $input),
                     (SoftmaxAxisMinusOne),
                     (returnType $r)),
-                 (CreateShapeOp $input),
+                 (CreateShapeOp (GetShapeResultType $input), $input),
                  (GetZeroI64Attr)),
   [(HasRankGT<3> $input)]
 >;

@@ -66,7 +66,7 @@ list_operation_version = args.list_operation_version
 
 # ==UPDATE_ONNX_VERSION_OPSET==
 # Look for tag above and update all references when upgrading the ONNX support within ONNX-MLIR.
-current_onnx_version = "1.17.0"
+current_onnx_version = "1.16.2"
 
 # Check the version of onnx package being used.
 if (
@@ -86,8 +86,8 @@ if (
 
 version_dict = {
     "Abs": [13],
-    "Acos": [22],
-    "Acosh": [22],
+    "Acos": [7],
+    "Acosh": [9],
     "Adagrad": [1],
     "Adam": [1],
     "Add": [14],
@@ -95,13 +95,13 @@ version_dict = {
     "ArgMax": [13],
     "ArgMin": [13],
     "ArrayFeatureExtractor": [1],
-    "Asin": [22],
-    "Asinh": [22],
-    "Atan": [22],
-    "Atanh": [22],
-    "AveragePool": [22],
+    "Asin": [7],
+    "Asinh": [9],
+    "Atan": [7],
+    "Atanh": [9],
+    "AveragePool": [19],
     "BatchNormalization": [15],
-    "Bernoulli": [22],
+    "Bernoulli": [15],
     "Binarizer": [1],
     "BitShift": [11],
     "BitwiseAnd": [18],
@@ -109,7 +109,7 @@ version_dict = {
     "BitwiseOr": [18],
     "BitwiseXor": [18],
     "BlackmanWindow": [17],
-    "Cast": [21],
+    "Cast": [19],
     "CastLike": [19],
     "CastMap": [1],
     "CategoryMapper": [1],
@@ -122,60 +122,60 @@ version_dict = {
     "ConcatFromSequence": [11],
     "Constant": [19],
     "ConstantOfShape": [20],
-    "Conv": [22],
+    "Conv": [11],
     "ConvInteger": [10],
-    "ConvTranspose": [22],
-    "Cos": [22],
-    "Cosh": [22],
+    "ConvTranspose": [11],
+    "Cos": [7],
+    "Cosh": [9],
     "Col2Im": [18],
     "CumSum": [14],
-    "DeformConv": [22],
+    "DeformConv": [19],
     "DepthToSpace": [13],
     "DequantizeLinear": [19],
-    "Det": [22],
+    "Det": [11],
     "DFT": [20, 17],
     "DictVectorizer": [1],
     "Div": [14],
-    "Dropout": [22],
+    "Dropout": [13],
     "DynamicQuantizeLinear": [11],
     "Einsum": [12],
-    "Elu": [22],
+    "Elu": [6],
     "Equal": [19],
     "Erf": [13],
     "Exp": [13],
     "Expand": [13],
-    "EyeLike": [22],
+    "EyeLike": [9],
     "FeatureVectorizer": [1],
-    "Flatten": [21],
+    "Flatten": [13],
     "Floor": [13],
-    "GRU": [22],
+    "GRU": [14],
     "Gather": [13],
     "GatherElements": [13],
     "GatherND": [13],
     "Gelu": [20],
     "Gemm": [13],
-    "GlobalAveragePool": [22],
+    "GlobalAveragePool": [1],
     "GlobalLpPool": [2],
-    "GlobalMaxPool": [22],
+    "GlobalMaxPool": [1],
     "Gradient": [1],
     "Greater": [13],
     "GreaterOrEqual": [16],
-    "GridSample": [22, 16],
+    "GridSample": [16],
     "GroupNormalization": [21, 18],
     "HammingWindow": [17],
     "HannWindow": [17],
-    "HardSigmoid": [22],
+    "HardSigmoid": [6],
     "Hardmax": [13],
-    "HardSwish": [22],
-    "Identity": [21],
-    "If": [21],
+    "HardSwish": [14],
+    "Identity": [19],
+    "If": [19],
     "Imputer": [1],
-    "InstanceNormalization": [22],
+    "InstanceNormalization": [6],
     "IsInf": [20],
     "IsNaN": [20],
     "LayerNormalization": [17],
     "LRN": [13],
-    "LSTM": [22],
+    "LSTM": [14],
     "LabelEncoder": [2],
     "LeakyRelu": [16],
     "Less": [13],
@@ -184,26 +184,26 @@ version_dict = {
     "LinearRegressor": [1],
     "Log": [13],
     "LogSoftmax": [13],
-    "Loop": [21],
-    "LpNormalization": [22],
-    "LpPool": [22],
+    "Loop": [19],
+    "LpNormalization": [1],
+    "LpPool": [18],
     "MatMul": [13],
     "MatMulInteger": [10],
     "Max": [13],
-    "MaxPool": [22],
-    "MaxRoiPool": [22],
-    "MaxUnpool": [22],
+    "MaxPool": [12],
+    "MaxRoiPool": [1],
+    "MaxUnpool": [11],
     "Mean": [13],
     "MeanVarianceNormalization": [13],
     "MelWeightMatrix": [17],
     "Min": [13],
-    "Mish": [22],
+    "Mish": [18],
     "Mod": [13],
     "Momentum": [1],
     "Mul": [14],
-    "Multinomial": [22],
+    "Multinomial": [7],
     "Neg": [13],
-    "NegativeLogLikelihoodLoss": [22],
+    "NegativeLogLikelihoodLoss": [13],
     "NonMaxSuppression": [11],
     "NonZero": [13],
     "Normalizer": [1],
@@ -215,16 +215,16 @@ version_dict = {
     "OptionalHasElement": [18],
     "Or": [7],
     "PRelu": [16],
-    "Pad": [21, 18, 13, 11, 2],
+    "Pad": [19, 18, 13, 11, 2],
     "Pow": [15],
     "QLinearConv": [10],
     "QLinearMatMul": [10],
     "QuantizeLinear": [19],
-    "RNN": [22],
-    "RandomNormal": [22],
-    "RandomNormalLike": [22],
-    "RandomUniform": [22],
-    "RandomUniformLike": [22],
+    "RNN": [14],
+    "RandomNormal": [1],
+    "RandomNormalLike": [1],
+    "RandomUniform": [1],
+    "RandomUniformLike": [1],
     "Range": [11],
     "Reciprocal": [13],
     "ReduceL1": [18, 13],
@@ -238,19 +238,19 @@ version_dict = {
     "ReduceSum": [13, 11],
     "ReduceSumSquare": [18, 13],
     "Relu": [14],
-    "Reshape": [21],
+    "Reshape": [19],
     "Resize": [19, 18, 13, 11, 10],
     "ReverseSequence": [10],
-    "RoiAlign": [22],
-    "Round": [22],
+    "RoiAlign": [16],
+    "Round": [11],
     "SVMClassifier": [1],
     "SVMRegressor": [1],
     "Scaler": [1],
-    "Scan": [21],
+    "Scan": [19],
     "Scatter": [11],
     "ScatterElements": [18],
     "ScatterND": [18],
-    "Selu": [22],
+    "Selu": [6],
     "SequenceAt": [11],
     "SequenceConstruct": [11],
     "SequenceEmpty": [11],
@@ -258,40 +258,40 @@ version_dict = {
     "SequenceInsert": [11],
     "SequenceLength": [11],
     "SequenceMap": [17],
-    "Shape": [21],
+    "Shape": [19],
     "Shrink": [9],
     "Sigmoid": [13],
     "Sign": [13],
-    "Sin": [22],
-    "Sinh": [22],
-    "Size": [21],
+    "Sin": [7],
+    "Sinh": [9],
+    "Size": [19],
     "Slice": [13],
     "Softmax": [13, 11],
     "SoftmaxCrossEntropyLoss": [13],
-    "Softplus": [22],
-    "Softsign": [22],
+    "Softplus": [1],
+    "Softsign": [1],
     "SpaceToDepth": [13],
     "Split": [18, 13, 11],
     "SplitToSequence": [11],
     "Sqrt": [13],
-    "Squeeze": [21, 11],
+    "Squeeze": [13, 11],
     "StringNormalizer": [10],
     "STFT": [17],
     "Sub": [14],
     "Sum": [13],
-    "Tan": [22],
+    "Tan": [7],
     "Tanh": [13],
     "TfIdfVectorizer": [9],
-    "ThresholdedRelu": [22],
+    "ThresholdedRelu": [10],
     "Tile": [13],
     "TopK": [11],
-    "Transpose": [21],
+    "Transpose": [13],
     "Trilu": [14],
     "TreeEnsembleClassifier": [1],
     "TreeEnsembleRegressor": [1],
     "Unique": [11],
-    "Unsqueeze": [21, 11],
-    "Upsample": [10, 7],
+    "Unsqueeze": [13, 11],
+    "Upsample": [9, 7],
     "Where": [16],
     "Xor": [7],
     "ZipMap": [1],
@@ -330,8 +330,6 @@ OpsWithCanonicalizer = [
     "Add",
     "And",
     "Cast",
-    "Clip",
-    "Concat",
     "Constant",
     "DepthToSpace",
     "DequantizeLinear",
@@ -341,11 +339,8 @@ OpsWithCanonicalizer = [
     "GlobalAveragePool",
     "GlobalMaxPool",
     "Greater",
-    "GroupNormalization",
-    "GroupNormalizationV18",
     "GRU",
     "Identity",
-    "InstanceNormalization",
     "Less",
     "Loop",
     "LSTM",
@@ -401,7 +396,6 @@ OpsWithVerifier = [
     "Gelu",
     "Greater",
     "GreaterOrEqual",
-    "GridSample",
     "GroupNormalizationV18",
     "Hardmax",
     "If",
@@ -444,7 +438,6 @@ OpsWithVerifier = [
     "Sub",
     "Sum",
     "TopK",
-    "Transpose",
     "Unique",
     "Upsample",
     "Where",
@@ -482,8 +475,6 @@ OpsWithResultTypeInference = [
     "If",
     "Loop",
     "RandomNormal",
-    "RandomNormalLike",
-    "RandomUniform",
     "Scan",
 ]
 
@@ -619,10 +610,6 @@ custom_definition_misc = dict(
 #     FLOAT8E5M2 = 19;      // follows IEEE 754, supports nan, inf, mostly used for gradients
 #     FLOAT8E5M2FNUZ = 20;  // follows IEEE 754, supports nan, inf, mostly used for gradients, no negative zero
 #
-#     // 4-bit integer data types
-#     UINT4 = 21;  // Unsigned integer in range [0, 15]
-#     INT4 = 22;   // Signed integer in range [-8, 7], using two's-complement representation
-#
 #     // Future extensions go here.
 #   }
 onnx_types = (
@@ -647,8 +634,6 @@ onnx_types = (
     "float8e4m3fnuz",
     "float8e5m2",
     "float8e5m2fnuz",
-    "uint4",
-    "int4",
 )
 tblgen_types = (
     "BF16",
@@ -672,8 +657,6 @@ tblgen_types = (
     "F8E4M3FNUZ",
     "F8E5M2",
     "F8E5M2FNUZ",
-    "AnyUI4",
-    "AnyI4",
 )
 
 # Maximum count for actual type. Number more than MAX_NUM_TYPES will be used to encode
@@ -1064,12 +1047,10 @@ def parse_type_str(allowedType):
         "seq": "SeqOf",
         "map": "TupleOf",
         "bool": "I1",
-        "uint4": "UI<4>",
         "uint8": "UI8",
         "uint16": "UI16",
         "uint32": "UI32",
         "uint64": "UI64",
-        "int4": "I<4>",
         "int8": "I8",
         "int16": "I16",
         "int32": "I32",
@@ -1407,15 +1388,6 @@ def gen_op_versions(file):
     file.write(s)
 
 
-def gen_opsets(file, defined_versions_collected):
-    indent = inc_indent()
-    s = ""
-    for name, versions in defined_versions_collected.items():
-        s += indent + 'op_opsets_map_["' + name + '"] = '
-        s += "{" + "{}".format(", ".join(str(x) for x in versions)) + "};\n"
-    file.write(s)
-
-
 """
 special cases:
 * Split: attr split default value: sizeof(output1) namely 1
@@ -1480,10 +1452,6 @@ def build_operator_schemas():
         list()
     )  # type: List[Tuple[Text, List[Tuple[int, List[Tuple[Text, OpSchema, List[OpSchema]]]]]]]
     existing_ops = set()  # type: Set[Text]
-    # Domain, name, versions
-    opsets: dict[str, dict[str, list[int]]] = defaultdict(
-        lambda: defaultdict(list)
-    )  # type: (Dict[Text, Dict[Text, List[int]]])
     for domain, _support_map in sorted(index.items()):
         if not should_render_domain(domain):
             continue
@@ -1492,7 +1460,6 @@ def build_operator_schemas():
             processed_name_map = list()
             for n, unsorted_versions in sorted(_name_map.items()):
                 versions = sorted(unsorted_versions, key=lambda s: s.since_version)
-                opsets[domain][n].extend(reversed([s.since_version for s in versions]))
                 schema = versions[-1]
                 if schema.name in existing_ops:
                     continue
@@ -1542,7 +1509,7 @@ def build_operator_schemas():
                         sys.exit()
             processed_support_map.append((_support, processed_name_map))
         operator_schemas.append((domain, processed_support_map))
-    return operator_schemas, opsets
+    return operator_schemas
 
 
 def main(args):  # type: (Type[Args]) -> None
@@ -1570,8 +1537,7 @@ def main(args):  # type: (Type[Args]) -> None
     gen_op_versions(op_importer)
 
     new_version_dict = dict()
-    operator_schemas, operation_opsets = build_operator_schemas()
-    for domain, support_map in operator_schemas:
+    for domain, support_map in build_operator_schemas():
         for _, name_map in support_map:
             # Generate Op with version number if not the latest version.
             previous_name = ""
@@ -1583,16 +1549,6 @@ def main(args):  # type: (Type[Args]) -> None
                     r = gen_op_def(schema, with_version)
                     op_def.write(r)
                     previous_name = schema.name
-
-    opsets_collected = dict()  # type: (Dict[str, List[int]])
-    for domain, ops in operation_opsets.items():
-        for op, versions in ops.items():
-            assert (
-                op not in opsets_collected
-            ), "Operation with same name exists in multiple domains"
-            opsets_collected[op] = versions
-
-    gen_opsets(op_importer, opsets_collected)
 
     if check_operation_version:
         for key in version_dict:

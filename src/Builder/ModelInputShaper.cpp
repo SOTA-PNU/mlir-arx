@@ -84,9 +84,9 @@ void ModelInputShaper::setShapeInformation(
     }
     if (hasAllInputSetting && (inputs_shape_information_.size() > 1)) {
       llvm::outs()
-          << "\nWarning: Found multiple settings that includes -1:d1xd2x...xdn "
+          << "Warning: Found multiple settings that includes -1:d1xd2x...xdn "
              "for all inputs. Only the first -1:d1xd2x...xdn is effective and "
-             "the other settings are ignored.\n\n";
+             "the other settings are ignored.\n";
     }
   }
 }

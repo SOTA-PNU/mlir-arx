@@ -19,8 +19,6 @@
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Transforms/DialectConversion.h"
 
-#include "src/Dialect/Mlir/DialectBuilder.hpp"
-
 #include "zdnn.h"
 
 namespace onnx_mlir {
@@ -32,12 +30,9 @@ enum class API {
   ZDNN_INIT_PRE_TRANSFORMED_DESC,
   ZDNN_GENERATE_TRANSFORMED_DESC,
   ZDNN_GENERATE_TRANSFORMED_DESC_CONCATENATED,
-  ZDNN_GENERATE_QUANTIZED_TRANSFORMED_DESC,
   ZDNN_GETSIZE_ZTENSOR,
   ZDNN_TRANSFORM_ZTENSOR,
-  ZDNN_TRANSFORM_ZTENSOR_WITH_SATURATION,
   ZDNN_TRANSFORM_ORIGTENSOR,
-  ZDNN_TRANSFORM_QUANTIZED_ZTENSOR,
   // Elementwise operations
   ZDNN_ADD,
   ZDNN_SUB,
@@ -47,30 +42,22 @@ enum class API {
   ZDNN_MAX,
   ZDNN_LOG,
   ZDNN_EXP,
-  ZDNN_INVSQRT,
-  // Reduction operations
-  ZDNN_REDUCE,
-  ZDNN_MEANREDUCE2D,
   // Activation operations
   ZDNN_RELU,
-  ZDNN_GELU,
   ZDNN_TANH,
   ZDNN_SIGMOID,
   ZDNN_SOFTMAX,
-  ZDNN_SQRT,
   // RNN operations
   ZDNN_LSTM,
   ZDNN_GRU,
   // Other operations
   ZDNN_MATMUL_OP,
   ZDNN_MATMUL_BCAST_OP,
-  ZDNN_MATMUL_TRANSPOSE_OP,
-  ZDNN_QUANTIZED_MATMUL_OP,
   ZDNN_CONV2D,
   ZDNN_AVGPOOL2D,
   ZDNN_MAXPOOL2D,
+  ZDNN_MEANREDUCE2D,
   ZDNN_BATCHNORM,
-  ZDNN_LEAKY_RELU,
   // Scalar operations.
   DLF16_TO_F32,
   F32_TO_DLF16,
@@ -113,8 +100,6 @@ struct ZTensor {
   mlir::Value bufferSize;
   mlir::Value bufferPtr;
   bool isTransformed;
-  mlir::Value recScale;
-  mlir::Value offset;
 };
 
 /// A helper class to create a zTensor.
@@ -132,10 +117,6 @@ public:
       bool isConcat = false,
       zdnn_concat_info concatInfo = RNN_TYPE_GRU | USAGE_WEIGHTS |
                                     PREV_LAYER_NONE);
-  // Get a quantized transformed descriptor.
-  mlir::Value getQuantizedTransformedDescPtr(mlir::Value preTransformedDescPtr,
-      zdnn_quantized_transform_types transform_type);
-
   // Get the pointer to memref.
   mlir::Value getAlignedI8Ptr(mlir::Value memRef);
   // Get buffer size from a transformed descriptor.
@@ -146,11 +127,6 @@ public:
       bool isTransformed, bool isConcat = false,
       zdnn_concat_info concatInfo = RNN_TYPE_GRU | USAGE_WEIGHTS |
                                     PREV_LAYER_NONE);
-  // Create a quantized zTensor.
-  ZTensor getQuantizedZTensor(mlir::Value bufferPtr, zdnn_data_types dataType,
-      zdnn_data_layouts layout, zdnn_quantized_transform_types transformType,
-      mlir::ArrayRef<mlir::Value> originalDims, mlir::Value recScale,
-      mlir::Value offset, bool isTransformed);
   // Create a zTensor from existing descriptors.
   ZTensor getZTensor(mlir::Value preTransformedDescPtr,
       mlir::Value transformedDescPtr, mlir::Value bufferSize,
@@ -221,19 +197,7 @@ mlir::Value toOpaquePtr(mlir::PatternRewriter &rewriter, mlir::Location loc,
 void fillInZTensor(mlir::PatternRewriter &rewriter, mlir::Location loc,
     mlir::ModuleOp module, mlir::Value zTensor,
     mlir::Value preTransformedDescPtr, mlir::Value transformedDescPtr,
-    bool isTransformed, mlir::Value bufferSize, mlir::Value alignedBuffer,
-    mlir::Value recScale = nullptr, mlir::Value offset = nullptr);
-
-/// Function to load a value from a LLVM Struct of MemRef.
-mlir::Value loadFromMemRef(onnx_mlir::LLVMBuilder &create, mlir::Type elementTy,
-    mlir::Value llvmMemRef, int32_t index);
-
-/// Function to store a value to a LLVM Struct of MemRef.
-void storeToMemRef(onnx_mlir::LLVMBuilder &create, mlir::Value val,
-    mlir::Value llvmMemRef, int32_t index);
-
-/// Function to get a quantized tranform type from a string.
-zdnn_quantized_transform_types getQuantizedTransformType(mlir::StringRef str);
+    bool isTransformed, mlir::Value bufferSize, mlir::Value alignedBuffer);
 
 } // namespace zlow
 } // namespace onnx_mlir

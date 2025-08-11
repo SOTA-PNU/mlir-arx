@@ -28,7 +28,6 @@
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
 #include "mlir/Conversion/ShapeToStandard/ShapeToStandard.h"
-#include "mlir/Conversion/UBToLLVM/UBToLLVM.h"
 #include "mlir/Conversion/VectorToLLVM/ConvertVectorToLLVM.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/Transforms/Passes.h"
@@ -194,25 +193,12 @@ void populateAffineAndKrnlToLLVMConversion(RewritePatternSet &patterns,
   // They run it in two steps, and add additional lowerings.
 
   vector::populateVectorToVectorCanonicalizationPatterns(patterns);
-  vector::populateVectorBitCastLoweringPatterns(patterns);
   vector::populateVectorBroadcastLoweringPatterns(patterns);
   vector::populateVectorContractLoweringPatterns(
       patterns, vector::VectorTransformsOptions());
-  vector::populateVectorMaskOpLoweringPatterns(patterns);
-  vector::populateVectorShapeCastLoweringPatterns(patterns);
-  vector::populateVectorInterleaveLoweringPatterns(patterns);
   vector::populateVectorTransposeLoweringPatterns(
       patterns, vector::VectorTransformsOptions());
-  // Vector transfer ops with rank > 1 should be lowered with VectorToSCF.
-  vector::populateVectorTransferLoweringPatterns(
-      patterns, /*maxTransferRank=*/1);
-  vector::populateVectorMaskMaterializationPatterns(
-      patterns, /*force32BitVectorIndices*/ false);
-  vector::populateVectorInsertExtractStridedSliceTransforms(patterns);
-  vector::populateVectorStepLoweringPatterns(patterns);
-  vector::populateVectorRankReducingFMAPattern(patterns);
-  // Some vector ops are lower to UB. Hence, lower UB to LLVM.
-  ub::populateUBToLLVMConversionPatterns(typeConverter, patterns);
+  vector::populateVectorShapeCastLoweringPatterns(patterns);
 
   populateAffineToStdConversionPatterns(patterns);
   populateSCFToControlFlowConversionPatterns(patterns);
@@ -571,7 +557,6 @@ bool extractConstantsToFile(ModuleOp &module, std::string filepath,
   OpBuilder::InsertionGuard guard(b);
   b.setInsertionPointToStart(module.getBody());
   std::string fname = llvm::sys::path::filename(filepath).str() + '\0';
-  fname = (isZOS(module)) ? krnl::a2e_s(fname) : fname;
   mlir::StringAttr valueAttr = mlir::StringAttr::get(context, fname);
   create.llvm.globalOp(LLVM::LLVMArrayType::get(llvmI8Ty, fname.size()),
       /*isConstant=*/true, LLVM::Linkage::Internal,
@@ -615,15 +600,15 @@ void loadConstantsFromFile(ModuleOp &module,
   OpBuilder b(ctx);
   MultiDialectBuilder<LLVMBuilder> create(b, loc);
 
-  Type llvmI1Ty = IntegerType::get(ctx, 1);
   Type llvmI8Ty = IntegerType::get(ctx, 8);
   Type llvmI64Ty = IntegerType::get(ctx, 64);
   Type llvmI8PtrTy = getPointerType(ctx, llvmI8Ty);
+  Type llvmVoidTy = LLVM::LLVMVoidType::get(ctx);
 
   // The following function will be emitted inside the IR to load constants from
   // file.
   std::string loadAllConstantsFuncName = "omLoadConstantsFromFile";
-  Type llvmFnType = LLVM::LLVMFunctionType::get(llvmI1Ty, {}, false);
+  Type llvmFnType = LLVM::LLVMFunctionType::get(llvmVoidTy, {}, false);
 
   // If calledByEntryPoint, this function will be called by entry points.
   // Otherwise, user program (C/C++/Java/Python) would call this function.
@@ -632,7 +617,6 @@ void loadConstantsFromFile(ModuleOp &module,
     Operation *firstEntryPointOp =
         getFirstEntryOpInBlock(module, entryGlobalOps);
     assert(firstEntryPointOp && "No entry function exists");
-    OpBuilder::InsertionGuard guard(b);
     b.setInsertionPoint(firstEntryPointOp);
     funcOp = create.llvm.func(
         loadAllConstantsFuncName, llvmFnType, /*createUniqueFunc=*/true);
@@ -650,16 +634,13 @@ void loadConstantsFromFile(ModuleOp &module,
           std::find(entryName.begin(), entryName.end(), '\0'), entryName.end());
       auto entryFunc = module.lookupSymbol<LLVM::LLVMFuncOp>(entryName);
       assert(entryFunc && "Entry function not found");
-      OpBuilder::InsertionGuard guard(b);
       b.setInsertionPoint(
           &entryFunc.getBody().front(), entryFunc.getBody().front().begin());
       FlatSymbolRefAttr loadAllConstantsRef = create.llvm.getOrInsertSymbolRef(
           module, LLVMBuilder::SymbolPostfix(module, loadAllConstantsFuncName),
-          llvmI1Ty, {},
+          llvmVoidTy, {},
           /*isVarArg=*/false);
-      Value retVal = create.llvm.call({llvmI1Ty}, loadAllConstantsRef, {});
-      equalOrFailed(module, b, loc,
-          create.llvm.constant(llvmI1Ty, static_cast<int64_t>(1)), retVal);
+      create.llvm.call({}, loadAllConstantsRef, {});
     }
   } else {
     OpBuilder::InsertionGuard guard(b);
@@ -704,11 +685,8 @@ void loadConstantsFromFile(ModuleOp &module,
   // Call a function to mmap the binary file to memory.
   Value isleVal = create.llvm.constant(llvmI64Ty, isle);
   Value sizeVal = create.llvm.constant(llvmI64Ty, dataSize);
-  Value retVal = RuntimeAPI::callApi(b, loc, apiRegistry,
-      RuntimeAPI::API::MMAP_BINARY_FILE,
+  RuntimeAPI::callApi(b, loc, apiRegistry, RuntimeAPI::API::MMAP_BINARY_FILE,
       {packedGlobalPtr, fnameI8Ptr, sizeVal, isleVal});
-  equalOrReturn(module, b, loc,
-      create.llvm.constant(llvmI1Ty, static_cast<int64_t>(1)), retVal, retVal);
 
   // Now set pointers for constants in the IR
   module->walk([&](LLVM::GlobalOp dataGlobalOp) -> WalkResult {
@@ -735,10 +713,11 @@ void loadConstantsFromFile(ModuleOp &module,
     RuntimeAPI::callApi(b, loc, apiRegistry,
         RuntimeAPI::API::GET_EXTERNAL_CONSTANT_ADDR,
         {dataPtr, packedGlobalPtr, offsetVal});
+
     return WalkResult::advance();
   });
 
-  create.llvm._return(create.llvm.constant(llvmI1Ty, static_cast<int64_t>(1)));
+  create.llvm._return();
 }
 
 //===----------------------------------------------------------------------===//

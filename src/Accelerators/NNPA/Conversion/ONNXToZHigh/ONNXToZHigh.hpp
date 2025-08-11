@@ -18,7 +18,6 @@
 
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Transforms/DialectConversion.h"
-#include "src/Accelerators/NNPA/Compiler/NNPACompilerOptions.hpp"
 #include "src/Dialect/ONNX/ONNXDimAnalysis.hpp"
 
 namespace onnx_mlir {

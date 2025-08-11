@@ -12,9 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef ONNX_MLIR_QUANTIZE_HELPER_HPP
-#define ONNX_MLIR_QUANTIZE_HELPER_HPP 1
-
 #include "src/Conversion/ONNXToKrnl/ONNXToKrnlCommon.hpp"
 
 namespace onnx_mlir {
@@ -30,22 +27,13 @@ void emitQuantizationLinearScalarParameters(
     mlir::Value zeroPoint, bool hasZeroPoint, bool enableSIMD,
     bool enableParallel, bool enableFastMath);
 
-// Compute min max over an entire tensor, which can then be used for dynamic
-// quantize linear.
-void emitDynamicQuantizationLinearMinMax(
-    mlir::ConversionPatternRewriter &rewriter, mlir::Location loc,
-    mlir::Operation *op, mlir::Value input, mlir::Value &inputMin,
-    mlir::Value &inputMax, bool enableSIMD, bool enableParallel);
-
-// Compute scale and zero points for dynamic quantization from min/max.
-void emitDynamicQuantizationLinearScalarParametersFromMinMax(
+// Scan the input to compute scale, zeroPoint, and quantizedZeroPoint given qMin
+// and qMax.
+void emitDynamicQuantizationLinearScalarParameters(
     mlir::ConversionPatternRewriter &rewriter, mlir::Location loc,
     mlir::Operation *op, mlir::MemRefType inputType,
-    mlir::MemRefType quantizedType, mlir::Value inputMin, mlir::Value inputMax,
-    mlir::Value qMin, mlir::Value qMax, mlir::Value &scale,
-    mlir::Value &zeroPoint, mlir::Value &quantizedZeroPoint, bool wantZeroPoint,
+    mlir::MemRefType quantizedType, mlir::Value input, mlir::Value qMin,
+    mlir::Value qMax, mlir::Value &scale, mlir::Value &zeroPoint,
+    mlir::Value &quantizedZeroPoint, bool wantZeroPoint, bool enableSIMD,
     bool enableParallel);
-
 } // namespace onnx_mlir
-
-#endif

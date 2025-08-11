@@ -31,9 +31,6 @@ LogicalResult ONNXPadOpShapeHelper::computeShape() {
   DimsExpr outputDims;
 
   // Get info about input data operand.
-  if (!hasShapeAndRank(dataOperand)) {
-    return failure();
-  }
   uint64_t dataRank = createIE->getShapedTypeRank(dataOperand);
 
   // Initialize context and results (pads & output)

@@ -83,7 +83,8 @@ bool isF32ScalarConstantTensor(Value v) {
 FloatAttr getScalarF32AttrFromConstant(Value v) {
   if (!isF32ScalarConstantTensor(v))
     return nullptr;
-  ElementsAttr constElements = getElementAttributeFromONNXValue(v);
+  DenseElementsAttr constElements = ElementsAttrBuilder::toDenseElementsAttr(
+      getElementAttributeFromONNXValue(v));
   return constElements.getSplatValue<FloatAttr>();
 }
 
@@ -103,30 +104,13 @@ Value getDynShape(Location loc, PatternRewriter &rewriter, Value x) {
       RankedTensorType::get({r}, rewriter.getI64Type()), dims, 0);
 }
 
-int ONNXToZHighLoweringConfiguration::optReportNNPAUnsupportedOps =
+int OnnxToZHighLoweringConfiguration::optReportNNPAUnsupportedOps =
     0; // 0: Compile option (--opt-report=NNPAUnsupportedOps) not specified.
-int ONNXToZHighLoweringConfiguration::reportOnNNPAUnsupportedOps =
+int OnnxToZHighLoweringConfiguration::reportOnNNPAUnsupportedOps =
     0; // 0: no reporting.
-bool ONNXToZHighLoweringConfiguration::isDynQuant = false;
-bool ONNXToZHighLoweringConfiguration::Quant::isActivationSym = false;
-bool ONNXToZHighLoweringConfiguration::Quant::isWeightSym = true;
-llvm::SmallVector<std::string>
-    ONNXToZHighLoweringConfiguration::Quant::opTypes = {};
-
-void configureONNXToZHighLoweringPass(bool optReportNNPAUnsupportedOps,
-    bool isDynQuant, bool quantIsActivationSym, bool quantIsWeightSym,
-    llvm::ArrayRef<std::string> quantOpTypes) {
-  ONNXToZHighLoweringConfiguration::optReportNNPAUnsupportedOps =
+void configureOnnxToZHighLoweringPass(bool optReportNNPAUnsupportedOps) {
+  OnnxToZHighLoweringConfiguration::optReportNNPAUnsupportedOps =
       optReportNNPAUnsupportedOps;
-  ONNXToZHighLoweringConfiguration::isDynQuant = isDynQuant;
-  if (isDynQuant) {
-    ONNXToZHighLoweringConfiguration::Quant::isActivationSym =
-        quantIsActivationSym;
-    ONNXToZHighLoweringConfiguration::Quant::isWeightSym = quantIsWeightSym;
-    ONNXToZHighLoweringConfiguration::Quant::opTypes.insert(
-        ONNXToZHighLoweringConfiguration::Quant::opTypes.begin(),
-        quantOpTypes.begin(), quantOpTypes.end());
-  }
 }
 
 } // namespace onnx_mlir

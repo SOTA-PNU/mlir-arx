@@ -81,10 +81,6 @@ bool is4DLayout(StringAttr layout) {
   return (layout && layout.getValue().equals_insensitive(LAYOUT_4D));
 }
 
-bool is4DSLayout(StringAttr layout) {
-  return (layout && layout.getValue().equals_insensitive(LAYOUT_4DS));
-}
-
 bool isNHWCLayout(StringAttr layout) {
   return (layout && layout.getValue().equals_insensitive(LAYOUT_NHWC));
 }

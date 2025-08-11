@@ -359,12 +359,6 @@ Value MathBuilder::clip(Value val, Value lb, Value ub) const {
   return min(val, ub); // Clip upper range.
 }
 
-Value MathBuilder::cos(Value val) const {
-  if (isScalarOrVectorFloat(val))
-    return b().create<math::CosOp>(loc(), val);
-  llvm_unreachable("expected float");
-}
-
 Value MathBuilder::floorDiv(Value lhs, Value rhs) const {
   splatToMatch(lhs, rhs);
   assert(lhs.getType() == rhs.getType() && "expected same type");
@@ -423,13 +417,9 @@ Value MathBuilder::sqrt(Value val) const {
 
 Value MathBuilder::pow(Value base, Value exp) const {
   splatToMatch(base, exp);
-  if (isScalarOrVectorFloat(base) && isScalarOrVectorFloat(exp))
+  if (isScalarOrVectorFloat(base))
     return b().create<math::PowFOp>(loc(), base, exp);
-  if (isScalarOrVectorFloat(base) && isScalarOrVectorInteger(exp))
-    return b().create<math::FPowIOp>(loc(), base, exp);
-  if (isScalarOrVectorInteger(base) && isScalarOrVectorInteger(exp))
-    return b().create<math::IPowIOp>(loc(), base, exp);
-  llvm_unreachable("expected pow: float ^ float, int ^ int, float ^ int");
+  llvm_unreachable("expected base float");
 }
 
 Value MathBuilder::neg(Value val) const {
@@ -555,40 +545,6 @@ Value MathBuilder::ule(Value lhs, Value rhs) const {
   llvm_unreachable("expected unsigned int");
 }
 
-Value MathBuilder::shli(Value lhs, Value rhs) const {
-  splatToMatch(lhs, rhs);
-  assert(lhs.getType() == rhs.getType() && "expected same type");
-  if (isScalarOrVectorInteger(lhs)) {
-    Type elemType = elementTypeOfScalarOrVector(lhs);
-    if (elemType.isUnsignedInteger()) {
-      unsigned elemWidth = mlir::cast<IntegerType>(elemType).getWidth();
-      Value castLhs = castToSignless(lhs, elemWidth);
-      Value castRhs = castToSignless(rhs, elemWidth);
-      Value castShift = b().create<arith::ShLIOp>(loc(), castLhs, castRhs);
-      return castToUnsigned(castShift, elemWidth);
-    } else
-      return b().create<arith::ShLIOp>(loc(), lhs, rhs);
-  }
-  llvm_unreachable("expected int");
-}
-
-Value MathBuilder::shri(Value lhs, Value rhs) const {
-  splatToMatch(lhs, rhs);
-  assert(lhs.getType() == rhs.getType() && "expected same type");
-  if (isScalarOrVectorInteger(lhs)) {
-    Type elemType = elementTypeOfScalarOrVector(lhs);
-    if (elemType.isUnsignedInteger()) {
-      unsigned elemWidth = mlir::cast<IntegerType>(elemType).getWidth();
-      Value castLhs = castToSignless(lhs, elemWidth);
-      Value castRhs = castToSignless(rhs, elemWidth);
-      Value castShift = b().create<arith::ShRUIOp>(loc(), castLhs, castRhs);
-      return castToUnsigned(castShift, elemWidth);
-    } else
-      return b().create<arith::ShRSIOp>(loc(), lhs, rhs);
-  }
-  llvm_unreachable("expected int");
-}
-
 Value MathBuilder::gt(Value lhs, Value rhs) const {
   splatToMatch(lhs, rhs);
   if (isScalarOrVectorUnsignedInteger(lhs))
@@ -661,7 +617,7 @@ Value MathBuilder::constant(Type type, double val) const {
             b().create<arith::ConstantOp>(loc(), b().getF64FloatAttr(val));
       })
       .Case<IntegerType>([&](IntegerType elementType) {
-        assert(val == static_cast<int64_t>(val) && "value is ambiguous");
+        assert(val == (int64_t)val && "value is ambiguous");
         unsigned width = elementType.getWidth();
 
         if (width == 1)
@@ -672,13 +628,11 @@ Value MathBuilder::constant(Type type, double val) const {
           if (elementType.isUnsignedInteger()) {
             Type signlessTy = b().getIntegerType(width);
             constant = b().create<arith::ConstantOp>(loc(),
-                b().getIntegerAttr(signlessTy,
-                    APInt(width, static_cast<int64_t>(val), false, true)));
+                b().getIntegerAttr(signlessTy, APInt(width, (int64_t)val)));
             constant = castToUnsigned(constant, width);
           } else {
             constant = b().create<arith::ConstantOp>(loc(),
-                b().getIntegerAttr(elementType,
-                    APInt(width, static_cast<int64_t>(val), false, true)));
+                b().getIntegerAttr(elementType, APInt(width, (int64_t)val)));
           }
         }
       })
@@ -741,7 +695,7 @@ TypedAttr MathBuilder::negativeInfAttr(Type type) const {
         default:
           llvm_unreachable("unsupported element type");
         }
-        attr = b().getIntegerAttr(type, APInt(width, value, false, true));
+        attr = b().getIntegerAttr(type, APInt(width, value));
       })
       .Default([](Type) { llvm_unreachable("unsupported element type"); });
   assert(attr != nullptr && "Expecting valid attribute");
@@ -786,7 +740,7 @@ TypedAttr MathBuilder::positiveInfAttr(Type type) const {
         default:
           llvm_unreachable("unsupported element type");
         }
-        attr = b().getIntegerAttr(type, APInt(width, value, false, true));
+        attr = b().getIntegerAttr(type, APInt(width, value));
       })
       .Default([](Type) { llvm_unreachable("unsupported element type"); });
   assert(attr != nullptr && "Expecting valid attribute");
@@ -1848,12 +1802,6 @@ void SCFBuilder::forLoopIE(IndexExpr lb, IndexExpr ub, int64_t step,
   }
 }
 
-void SCFBuilder::forLoopsIE(ArrayRef<IndexExpr> lbs, ArrayRef<IndexExpr> ubs,
-    ArrayRef<int64_t> steps, ArrayRef<bool> useParallel,
-    SCFLoopBodyFn builderFn) const {
-  impl::forLoopsIE<SCFBuilder>(*this, lbs, ubs, steps, useParallel, builderFn);
-}
-
 void SCFBuilder::parallelLoops(ValueRange lbs, ValueRange ubs, ValueRange steps,
     SCFLoopBodyFn bodyFn) const {
   b().create<scf::ParallelOp>(loc(), lbs, ubs, steps,
@@ -2315,8 +2263,7 @@ Value LLVMBuilder::constant(Type type, int64_t val) const {
           assert(type.isSignless() &&
                  "LLVM::ConstantOp requires a signless type.");
           constant = b().create<LLVM::ConstantOp>(loc(), type,
-              b().getIntegerAttr(
-                  type, APInt(width, static_cast<int64_t>(val), false, true)));
+              b().getIntegerAttr(type, APInt(width, (int64_t)val)));
         }
       })
       .Case<IndexType>([&](Type) {
@@ -2367,7 +2314,7 @@ LLVM::LLVMFuncOp LLVMBuilder::func(
     StringRef funcName, Type funcType, bool createUniqueFunc) const {
   // If createUniqueFunc, we create two functions: name and name_postfix.
   // They have the same signatures and `name` will call `name_postfix`.
-  // `name_postfix` function is expected to be unique across all generated
+  // `name_postfix` funtion is expected to be unique across all generated
   // modules, allowing to run multiple models at the same time.
   LLVM::LLVMFuncOp funcOp =
       b().create<LLVM::LLVMFuncOp>(loc(), funcName, funcType);

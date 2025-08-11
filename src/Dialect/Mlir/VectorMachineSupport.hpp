@@ -98,7 +98,7 @@ protected:
 public:
   // Must call setGlobalVectorMachineSupport once before using any calls below.
   static void setGlobalVectorMachineSupport(
-      const std::string &arch, const std::string &cpu, const std::string &attr);
+      std::string arch, std::string cpu, std::string attr);
   static void clearGlobalVectorMachineSupport();
 
   static std::string getArchName() { return vms()->computeArchName(); }
@@ -201,12 +201,12 @@ public:
 
 // Support for IBM Z servers.
 
-class ZArch14VectorMachineSupport : public VectorMachineSupport {
+class Z16VectorMachineSupport : public VectorMachineSupport {
 public:
-  ZArch14VectorMachineSupport() = default;
-  virtual ~ZArch14VectorMachineSupport() = default;
+  Z16VectorMachineSupport() = default;
+  virtual ~Z16VectorMachineSupport() = default;
 
-  std::string computeArchName() override { return "z16/arch14 equivalent"; }
+  std::string computeArchName() override { return "z16"; }
   bool needCustomASM(GenericOps gop, mlir::Type elementType) override;
   int64_t computeArchVectorRegisterNum() override { return 32; }
   int64_t computeArchVectorBitWidth() override { return 128; }
@@ -214,10 +214,9 @@ public:
       GenericOps gop, mlir::Type elementType) override;
 };
 
-// TODO: create models for arch12, arch13, arch15.
-using ZArch12VectorMachineSupport = ZArch14VectorMachineSupport;
-using ZArch13VectorMachineSupport = ZArch14VectorMachineSupport;
-using ZArch15VectorMachineSupport = ZArch14VectorMachineSupport;
+// TODO: create models for z14 and z15.
+using Z14VectorMachineSupport = Z16VectorMachineSupport;
+using Z15VectorMachineSupport = Z16VectorMachineSupport;
 
 // Support for x86 processors (SSE 4.2 and AVX2)
 class SSE42x86VectorMachineSupport : public VectorMachineSupport {
