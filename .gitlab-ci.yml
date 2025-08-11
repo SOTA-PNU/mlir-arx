@@ -77,16 +77,20 @@ build:
       -DONNX_MLIR_ACCELERATORS=${ACCEL} 
       -DCMAKE_LIBRARY_PATH=${LLVM_PROJECT_ROOT}/build/lib ..
     - cmake --build .
+    - cd ${CI_PROJECT_DIR}
+    - mkdir artifacts
+    - cp build/Release/bin/onnx-mlir artifacts/
+    - cp build/Release/bin/onnx-mlir-opt artifacts/
+
 
 unit-test:
   stage: unit-test
-  image: ubuntu:24.04
+  image: python:3.12.11-bullseye
   needs:
     - job: build
       artifacts: true
   before_script:
-    - export PATH=${CI_PROJECT_DIR}/build/Release/bin:$PATH
-
+    - export PATH=${CI_PROJECT_DIR}/artifacts:$PATH
   script:
     - cd "test/mlir-arx"
     - python3 run.py
