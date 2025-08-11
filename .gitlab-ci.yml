@@ -51,6 +51,13 @@ build:
     NPROC: 40
     ACCEL: ARX
     LLVM_PROJECT_ROOT: ${WORK_DIR}/llvm-project
+  rules:
+    - if: $CI_COMMIT_REF_PROTECTED == "true"
+      changes:
+        - src/
+        - include/
+        - third_party/
+        
   artifacts:
     paths:
       - artifacts/
