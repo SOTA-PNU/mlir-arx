@@ -3,13 +3,6 @@ stages:
   - build
   - unit-test
 
-default:
-  cache:
-    key: "arx-$CI_COMMIT_REF_SLUG"
-    paths:
-      - artifacts/
-    policy: pull-push
-    
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
 
@@ -70,7 +63,6 @@ build:
       -DCMAKE_LIBRARY_PATH=${LLVM_PROJECT_ROOT}/build/lib ..
     - cmake --build .
     - cd ${CI_PROJECT_DIR}
-    - mkdir artifacts
     - cp build/Debug/bin/onnx-mlir artifacts/
     - cp build/Debug/bin/onnx-mlir-opt artifacts/
     - cp /workdir/llvm-project/build/bin/mlir-translate artifacts/
