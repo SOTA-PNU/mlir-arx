@@ -108,19 +108,25 @@ unit-test:
       optional: true
 
   before_script:
-    - apt update && apt-get install -y libprotobuf-dev python3.12 zip
-    - |
-      set -e
-      if [ -d artifacts ]; then
-        echo "[test] got artifacts from current pipeline"
-      else
-        echo "[test] try to fetch last successful artifacts for this ref"
-        curl --fail -L \
-          --header "JOB-TOKEN: $CI_JOB_TOKEN" \
-          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/jobs/artifacts/$CI_COMMIT_REF_NAME/download?job=build" \
-          -o artifacts.zip && unzip artifacts.zip || true
-      fi
-    - export PATH=${CI_PROJECT_DIR}/artifacts:$PATH
+    # - apt update && apt-get install -y libprotobuf-dev python3.12 zip
+    - echo "$CI_API_V4_URL/projects/$CI_PROJECT_ID/jobs/artifacts/$CI_COMMIT_REF_NAME/download?job=build"
+    - echo $CI_JOB_TOKEN
+    - echo $CI_API_V4_URL
+    - echo $CI_PROJECT_ID
+    - echo $CI_COMMIT_REF_NAME
+    - echo $CI_COMMIT_SHA
+    # - |
+    #   set -e
+    #   if [ -d artifacts ]; then
+    #     echo "[test] got artifacts from current pipeline"
+    #   else
+    #     echo "[test] try to fetch last successful artifacts for this ref"
+    #     curl --fail -L \
+    #       --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+    #       "$CI_API_V4_URL/projects/$CI_PROJECT_ID/jobs/artifacts/$CI_COMMIT_REF_NAME/download?job=build" \
+    #       -o artifacts.zip && unzip artifacts.zip || true
+    #   fi
+    # - export PATH=${CI_PROJECT_DIR}/artifacts:$PATH
   script:
     - cd "test/mlir-arx"
     - python3.12 run.py
