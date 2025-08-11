@@ -50,9 +50,10 @@ build:
     WORK_DIR: /workdir
     NPROC: 40
     ACCEL: ARX
+    LLVM_PROJECT_ROOT: ${WORK_DIR}/llvm-project
   artifacts:
     paths:
-      - /builds/ones-ai/mlir-arx/build/Release/
+      - build/Release/
     expire_in: 1 week
   before_script:
     - pwd
@@ -67,18 +68,27 @@ build:
     - ls -la /workdir/llvm-project/build/lib/cmake/llvm/ || echo "LLVM cmake dir not found"
     - ls -la /workdir/llvm-project/build/bin/ || echo "LLVM build bin dir not found"
     - /workdir/llvm-project/build/bin/clang++ --version || echo "clang++ version check failed"
-    - cmake -G Ninja -DLLVM_DIR=/workdir/llvm-project/build/lib/cmake/llvm -DCMAKE_CXX_COMPILER=/workdir/llvm-project/build/bin/clang++ -DCMAKE_C_COMPILER=/workdir/llvm-project/build/bin/clang-20 -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF -DMLIR_DIR=/workdir/llvm-project/build/lib/cmake/mlir -DONNX_MLIR_ACCELERATORS=${ACCEL} -DCMAKE_LIBRARY_PATH=/workdir/llvm-project/build/lib ..
+    - >
+      cmake -G Ninja -DLLVM_DIR=/build/lib/cmake/llvm 
+      -DCMAKE_CXX_COMPILER=${LLVM_PROJECT_ROOT}/build/bin/clang++ 
+      -DCMAKE_C_COMPILER=${LLVM_PROJECT_ROOT}/build/bin/clang-20 
+      -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF 
+      -DMLIR_DIR=${LLVM_PROJECT_ROOT}/build/lib/cmake/mlir 
+      -DONNX_MLIR_ACCELERATORS=${ACCEL} 
+      -DCMAKE_LIBRARY_PATH=${LLVM_PROJECT_ROOT}/build/lib ..
     - cmake --build .
-    - export PATH=$PATH:/builds/ones-ai/mlir-arx/build/Release/bin
-    - cd /builds/ones-ai/mlir-arx/test/mlir-arx
-    - python3 run.py
 
 unit-test:
   stage: unit-test
-  image: ${DOCKER_IMAGE}:latest
+  image: ubuntu:24.04
+  needs:
+    - job: build
+      artifacts: true
+  before_script:
+    - export PATH=${CI_PROJECT_DIR}/build/Release/bin:$PATH
+
+  script:
+    - cd "test/mlir-arx"
+    - python3 run.py
   dependencies:
     - build
-  script:
-    - cd /builds/ones-ai/mlir-arx/test/mlir-arx
-    - python3 run.py
-
