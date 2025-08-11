@@ -1,4 +1,4 @@
-module attributes {llvm.data_layout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128", llvm.target_triple = "x86_64-unknown-linux-gnu", "onnx-mlir.symbol-postfix" = "mnist-12-int8"} {
+module attributes {llvm.data_layout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128", llvm.target_triple = "x86_64-unknown-linux-gnu", "onnx-mlir.accels" = ["ARX-0x0"], "onnx-mlir.symbol-postfix" = "kicjmc8jufyvxjsbx3lhr37c3meffr.mlir"} {
   func.func @main_graph(%arg0: tensor<1x1x28x28xf32> {onnx.name = "Input3"}) -> (tensor<1x10xf32> {onnx.name = "Plus214_Output_0"}) {
     %0 = onnx.Constant dense<[1, 256]> : tensor<2xi64>
     %1 = onnx.Constant dense<0> : tensor<ui8>
