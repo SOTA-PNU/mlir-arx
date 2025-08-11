@@ -81,18 +81,22 @@ build:
     - mkdir artifacts
     - cp build/Release/bin/onnx-mlir artifacts/
     - cp build/Release/bin/onnx-mlir-opt artifacts/
-
+    - cp /workdir/llvm-project/build/bin/mlir-translate artifacts/
 
 unit-test:
   stage: unit-test
-  image: python:3.12.11-bullseye
+  image: ubuntu:24.04
+  variables:
+    DEBIAN_FRONTEND: noninteractive
+    TZ: Asia/Seoul
   needs:
     - job: build
       artifacts: true
   before_script:
+    - apt update && apt-get install -y libprotobuf-dev python3.12
     - export PATH=${CI_PROJECT_DIR}/artifacts:$PATH
   script:
     - cd "test/mlir-arx"
-    - python3 run.py
+    - python3.12 run.py
   dependencies:
     - build
