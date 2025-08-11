@@ -46,7 +46,7 @@ WORKDIR /workdir/onnx-mlir
 # 6) Set the PATH environment vars for make/debug mode. Replace Debug
 #    with Release in the PATH below when using Release mode.
 WORKDIR /workdir
-ENV NPROC=4
+ENV NPROC=40
 RUN ls
 
 RUN git clone -n https://github.com/llvm/llvm-project.git llvm
