@@ -3,6 +3,13 @@ stages:
   - build
   - unit-test
 
+default:
+  cache:
+    key: "arx-$CI_COMMIT_REF_SLUG"
+    paths:
+      - artifacts/
+    policy: pull-push
+    
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
 
