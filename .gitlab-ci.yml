@@ -56,7 +56,8 @@ build:
     - ls -la /workdir/llvm-project/build/lib/cmake/llvm/ || echo "LLVM cmake dir not found"
     - ls -la /workdir/llvm-project/build/bin/ || echo "LLVM build bin dir not found"
     - /workdir/llvm-project/build/bin/clang++ --version || echo "clang++ version check failed"
-    - if [ -d artifacts ]; then
+    - |
+      if [ -d artifacts ]; then
         exit 0;
       fi
     - >
