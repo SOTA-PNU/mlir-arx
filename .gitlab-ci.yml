@@ -79,15 +79,15 @@ build:
       cmake -G Ninja -DLLVM_DIR=/build/lib/cmake/llvm 
       -DCMAKE_CXX_COMPILER=${LLVM_PROJECT_ROOT}/build/bin/clang++ 
       -DCMAKE_C_COMPILER=${LLVM_PROJECT_ROOT}/build/bin/clang-20 
-      -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=OFF 
+      -DCMAKE_BUILD_TYPE=Debug -DLLVM_ENABLE_ASSERTIONS=OFF 
       -DMLIR_DIR=${LLVM_PROJECT_ROOT}/build/lib/cmake/mlir 
       -DONNX_MLIR_ACCELERATORS=${ACCEL} 
       -DCMAKE_LIBRARY_PATH=${LLVM_PROJECT_ROOT}/build/lib ..
     - cmake --build .
     - cd ${CI_PROJECT_DIR}
     - mkdir artifacts
-    - cp build/Release/bin/onnx-mlir artifacts/
-    - cp build/Release/bin/onnx-mlir-opt artifacts/
+    - cp build/Debug/bin/onnx-mlir artifacts/
+    - cp build/Debug/bin/onnx-mlir-opt artifacts/
     - cp /workdir/llvm-project/build/bin/mlir-translate artifacts/
 
 unit-test:
