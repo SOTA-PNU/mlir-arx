@@ -38,6 +38,9 @@ build-docker:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: manual
       allow_failure: true
+    # 모든 브랜치에서 수동 실행 가능 (manual trigger)
+    - when: manual
+      allow_failure: true
 
 
 # build-docker-no-push:
