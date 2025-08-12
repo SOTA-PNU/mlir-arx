@@ -28,13 +28,6 @@ build-docker:
       --cache-repo "${DOCKER_IMAGE}-cache"
       --compressed-caching
       --snapshotMode=time
-      > artifacts/logs/kaniko.log 2>&1 \
-      || { echo "---- tail(2000) kaniko.log ----"; tail -n 2000 artifacts/logs/kaniko.log; exit 1; }
-  artifacts:
-    when: always
-    paths:
-      - artifacts/logs/kaniko.log
-    expire_in: 1 week
 
   rules:
     # 자동 실행: 보호된 브랜치에서 Dockerfile이 변경된 경우
