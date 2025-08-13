@@ -78,6 +78,8 @@ RUN apt-get update && apt-get install -y openssh-server git && \
     sed -i 's/#PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config && \
     passwd -d root
 
+RUN apt-get install -y libprotobuf-dev python3.12 zip
+
 # RUN ACCEL=ARX NPROC=80 WORKDIR=/workdir LLVM_PROJECT_ROOT=${WORKDIR}/llvm-project \
 #     cd ${WORKDIR} && \
 #     git clone --recursive https://gitlab.com/ones-ai/mlir-arx -b chacha/mlir-arx && \
