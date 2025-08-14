@@ -109,7 +109,8 @@ build:
 
 unit-test:
   stage: unit-test
-  image: ubuntu:24.04
+  image: ${DOCKER_IMAGE}:latest
+  # image: ubuntu:24.04
   variables:
     PYTHONUNBUFFERED: "1"
     DEBIAN_FRONTEND: noninteractive
@@ -119,10 +120,10 @@ unit-test:
       artifacts: true
 
   before_script:
-    - apt update && apt-get install -y libprotobuf-dev python3.12 zip
+    # - apt update && apt-get install -y libprotobuf-dev python3.12 zip
     - export PATH=${CI_PROJECT_DIR}/artifacts:$PATH
   script:
     - cd "test/mlir-arx"
-    - python3.12 run.py
+    - python3 run.py
   dependencies:
     - build
