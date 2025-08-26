@@ -10,10 +10,11 @@ def generate_random_string(length):
 
 
 test_list = [   
-    ("MNIST : EmitC to C++", "mlir-translate -mlir-to-cpp ", "./emitc/onnx_to_emitc.mlir", "./code/mnist_onnx.hpp"),
-    ("MNIST : Onnx to EmitC", "onnx-mlir --maccel=ARX --EmitEmitCIR --EmitMLIR", "./onnx/mnist-12-int8.onnx", "./emitc/onnx_to_emitc.mlir"),
-    ("MNIST : Onnx to ARX", "onnx-mlir --maccel=ARX --EmitARXIR --EmitMLIR", "./onnx/mnist-12-int8.onnx", "./harx/onnx_to_arx.mlir"),
-    ("MNIST : Onnx to ONNX-MLIR", "onnx-mlir --maccel=ARX --EmitMLIR ", "./onnx/mnist-12-int8.onnx", "./mlir/onnx_to_mlir.mlir"),
+    ("MNIST : C++ to ARX C++", f'{os.getcwd()}/code_to_arx.py ', '-i', "./code/mnist_onnx.h", "./arx/mnist_onnx.h"),
+    ("MNIST : EmitC to C++", "mlir-translate -mlir-to-cpp ", '', "./emitc/onnx_to_emitc.mlir", "./code/mnist_onnx.h"),
+    ("MNIST : Onnx to EmitC", "onnx-mlir --maccel=ARX --EmitEmitCIR --EmitMLIR", '', "./onnx/mnist-12-int8.onnx", "./emitc/onnx_to_emitc.mlir"),
+    ("MNIST : Onnx to ARX", "onnx-mlir --maccel=ARX --EmitARXIR --EmitMLIR", '', "./onnx/mnist-12-int8.onnx", "./harx/onnx_to_arx.mlir"),
+    ("MNIST : Onnx to ONNX-MLIR", "onnx-mlir --maccel=ARX --EmitMLIR ", '', "./onnx/mnist-12-int8.onnx", "./mlir/onnx_to_mlir.mlir"),
 ]
 
 pass_test = 0 
@@ -21,12 +22,12 @@ error_test = 0
 run_test = 0
 fail_list = []
 success_list = []
-for (name, test, input_file, pred_file) in test_list:
+for (name, test, input_param, input_file, pred_file) in test_list:
     pass_test += 1
     tmp_name = generate_random_string(30)
     tmp_file_path = os.path.join('output', tmp_name)
     
-    shell_cmd = "{} {} -o {}".format(test, input_file, tmp_file_path)
+    shell_cmd = "{} {} {} -o {}".format(test, input_param, input_file, tmp_file_path)
     print(shell_cmd)
     os.system(shell_cmd)
     

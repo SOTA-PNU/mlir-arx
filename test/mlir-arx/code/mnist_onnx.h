@@ -1,6 +1,5 @@
 #include <stdbool.h>
 #include <string.h>
-#include <stdlib.h>
 #include <stdint.h>
 static float dequantization_18[1][10];
 static uint8_t dequantization_18_offset[1] = {112};
@@ -23,12 +22,12 @@ static int32_t convolutionshift_4_shift_scale[8] = {8, 9, 8, 9, 9, 9, 9, 9};
 static uint8_t convolutionshift_4_kernel[8][1][5][5] = {126, 97, 64, 119, 145, 53, 68, 121, 223, 160, 66, 134, 254, 196, 72, 107, 196, 201, 90, 51, 132, 155, 100, 68, 91, 118, 176, 239, 222, 138, 104, 65, 126, 245, 217, 93, 54, 91, 207, 210, 0, 41, 88, 178, 201, 42, 76, 112, 124, 191, 124, 141, 160, 174, 217, 171, 181, 177, 170, 159, 66, 117, 108, 104, 95, 0, 34, 57, 46, 68, 101, 83, 81, 108, 119, 48, 38, 40, 106, 68, 0, 71, 112, 171, 170, 23, 121, 160, 138, 188, 152, 226, 185, 124, 175, 214, 221, 135, 183, 218, 87, 104, 127, 85, 97, 144, 165, 98, 85, 23, 116, 203, 124, 39, 22, 106, 153, 178, 135, 125, 129, 173, 243, 254, 171, 98, 69, 94, 136, 152, 159, 32, 0, 25, 60, 221, 187, 83, 67, 90, 165, 241, 190, 149, 108, 137, 179, 168, 208, 166, 149, 254, 78, 23, 79, 210, 238, 34, 30, 71, 221, 195, 23, 58, 107, 190, 153, 88, 47, 92, 206, 169, 143, 157, 117, 122, 97, 148, 179, 203, 164, 211, 171, 198, 254, 101, 171, 157, 138, 157, 133, 96, 100, 83, 15, 119, 84, 31, 63, 84};
 static uint8_t quantization_0[1][1][28][28];
 static uint8_t quantization_0_offset[1] = {0};
-extern "C" int32_t convolution_i8_shift(uint8_t*, uint8_t*, int32_t*, uint8_t*, uint8_t*, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, bool, bool, int32_t*, uint8_t, uint8_t);
-extern "C" int32_t fullyconnected_i8_shift(uint8_t*, uint8_t*, int32_t*, uint8_t*, uint8_t*, uint32_t, uint32_t, uint32_t, uint32_t, bool, int32_t*, uint32_t, uint32_t);
-extern "C" int32_t maxpool_i8(uint8_t*, uint8_t*, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t);
-extern "C" int32_t quantize(float*, uint8_t*, uint32_t, float*, uint8_t*);
-extern "C" int32_t dequantize(uint8_t*, float*, uint32_t, float*, uint8_t*, int32_t, bool);
-extern "C" int32_t transpose_i8(uint8_t*, uint8_t*, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint8_t, uint8_t, uint8_t, uint8_t);
+extern int32_t convolution_i8_shift(uint8_t*, uint8_t*, int32_t*, uint8_t*, uint8_t*, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, bool, bool, int32_t*, uint8_t, uint8_t);
+extern int32_t fullyconnected_i8_shift(uint8_t*, uint8_t*, int32_t*, uint8_t*, uint8_t*, uint32_t, uint32_t, uint32_t, uint32_t, bool, int32_t*, uint32_t, uint32_t);
+extern int32_t maxpool_i8(uint8_t*, uint8_t*, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t);
+extern int32_t quantize(float*, uint8_t*, uint32_t, float*, uint8_t*);
+extern int32_t dequantize(uint8_t*, float*, uint32_t, float*, uint8_t*, int32_t, bool);
+extern int32_t transpose_i8(uint8_t*, uint8_t*, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint8_t, uint8_t, uint8_t, uint8_t);
 void main_graph(float* v1, float* v2) {
   int32_t v3 = 40;
   int32_t v4 = 1;

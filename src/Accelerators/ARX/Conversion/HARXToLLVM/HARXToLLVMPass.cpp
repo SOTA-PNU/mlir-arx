@@ -76,7 +76,7 @@ void CreateFunctions(ModuleOp module, OpBuilder &builder, FunctionType fnType, s
   auto c = builder.create<emitc::FuncOp>(module.getLoc(), fnName, fnType);
   c.setPrivate();
 
-  c->setAttr("specifiers", builder.getStrArrayAttr({"extern", "\"C\""}));
+  c->setAttr("specifiers", builder.getStrArrayAttr({"extern"}));
 }
 
 void HARXToLLVMLoweringPass::runOnOperation() {
@@ -259,7 +259,7 @@ void HARXToLLVMLoweringPass::runOnOperation() {
   });
 
   builder.create<emitc::IncludeOp>(module.getLoc(), "stdint.h", true);
-  builder.create<emitc::IncludeOp>(module.getLoc(), "stdlib.h", true);
+  // builder.create<emitc::IncludeOp>(module.getLoc(), "stdlib.h", true);
   builder.create<emitc::IncludeOp>(module.getLoc(), "string.h", true);
   builder.create<emitc::IncludeOp>(module.getLoc(), "stdbool.h", true);
   
