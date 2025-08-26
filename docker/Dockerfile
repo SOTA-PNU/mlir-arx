@@ -46,7 +46,7 @@ WORKDIR /workdir/onnx-mlir
 # 6) Set the PATH environment vars for make/debug mode. Replace Debug
 #    with Release in the PATH below when using Release mode.
 WORKDIR /workdir
-ENV NPROC=4
+ENV NPROC=40
 RUN ls
 
 RUN git clone -n https://github.com/llvm/llvm-project.git llvm
@@ -71,10 +71,14 @@ RUN rm -rf /workdir/onnx-mlir
 ENV PATH=$PATH:/workdir/onnx-mlir/build/Debug/bin/:/workdir/onnx-mlir/build/Debug/lib:/workdir/llvm-project/build/bin
 
 RUN apt-get update && apt-get install -y openssh-server git && \
-    mkdir /var/run/sshd && \
+    mkdir -p /run && \
+    mkdir -p /var/run && \
+    mkdir -p /var/run/sshd && \
     sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
     sed -i 's/#PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config && \
     passwd -d root
+
+RUN apt-get install -y libprotobuf-dev zip
 
 # RUN ACCEL=ARX NPROC=80 WORKDIR=/workdir LLVM_PROJECT_ROOT=${WORKDIR}/llvm-project \
 #     cd ${WORKDIR} && \

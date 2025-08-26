@@ -19,10 +19,21 @@ build-docker:
       --dockerfile "${CI_PROJECT_DIR}/docker/Dockerfile"
       --destination "${DOCKER_IMAGE}:${CI_COMMIT_REF_NAME}"
       --destination "${DOCKER_IMAGE}:latest"
+
+
   rules:
+    # 자동 실행: 보호된 브랜치에서 Dockerfile이 변경된 경우
     - if: $CI_COMMIT_REF_PROTECTED == "true"
       changes:
         - docker/Dockerfile
+    # 수동 실행: 언제든지 manual trigger로 실행 가능
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+      allow_failure: true
+    # 모든 브랜치에서 수동 실행 가능 (manual trigger)
+    - when: manual
+      allow_failure: true
+
 
 # build-docker-no-push:
 #   stage: build-docker
@@ -90,7 +101,8 @@ build:
 
 unit-test:
   stage: unit-test
-  image: ubuntu:24.04
+  image: ${DOCKER_IMAGE}:latest
+  # image: ubuntu:24.04
   variables:
     PYTHONUNBUFFERED: "1"
     DEBIAN_FRONTEND: noninteractive
@@ -100,10 +112,10 @@ unit-test:
       artifacts: true
 
   before_script:
-    - apt update && apt-get install -y libprotobuf-dev python3.12 zip
+    # - apt update && apt-get install -y libprotobuf-dev python3.12 zip
     - export PATH=${CI_PROJECT_DIR}/artifacts:$PATH
   script:
     - cd "test/mlir-arx"
-    - python3.12 run.py
+    - python3 run.py
   dependencies:
     - build
