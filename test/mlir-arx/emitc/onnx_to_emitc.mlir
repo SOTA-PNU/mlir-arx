@@ -1,7 +1,6 @@
-module attributes {llvm.data_layout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128", llvm.target_triple = "x86_64-unknown-linux-gnu", "onnx-mlir.accels" = ["ARX-0x0"], "onnx-mlir.symbol-postfix" = "8ie4evzmgp5brmfnbhmkxfw8kbynxo"} {
+module attributes {llvm.data_layout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128", llvm.target_triple = "x86_64-unknown-linux-gnu", "onnx-mlir.accels" = ["ARX-0x0"], "onnx-mlir.symbol-postfix" = "l2jfwlif6jumm2orercq2rehykejdm"} {
   emitc.include <"stdbool.h">
   emitc.include <"string.h">
-  emitc.include <"stdlib.h">
   emitc.include <"stdint.h">
   emitc.global static @dequantization_18 : !emitc.array<1x10xf32>
   emitc.global static @dequantization_18_offset : !emitc.array<1xui8> = dense<112>
@@ -24,12 +23,12 @@ module attributes {llvm.data_layout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i6
   emitc.global static @convolutionshift_4_kernel : !emitc.array<8x1x5x5xui8> = dense<"0x7E61407791354479DFA04286FEC4486BC4C95A33849B64445B76B0EFDE8A68417EF5D95D365BCFD2002958B2C92A4C707CBF7C8DA0AED9ABB5B1AA9F42756C685F0022392E446553516C773026286A44004770ABAA1779A08ABC98E2B97CAFD6DD87B7DA57687F556190A562551774CB7C27166A99B2877D81ADF3FEAB62455E88989F2000193CDDBB53435AA5F1BE956C89B3A8D0A695FE4E174FD2EE221E47DDC3173A6BBE99582F5CCEA98F9D757A6194B3CBA4D3ABC6FE65AB9D8A9D856064530F77541F3F54">
   emitc.global static @quantization_0 : !emitc.array<1x1x28x28xui8>
   emitc.global static @quantization_0_offset : !emitc.array<1xui8> = dense<0>
-  emitc.func private @convolution_i8_shift(!emitc.ptr<ui8>, !emitc.ptr<ui8>, !emitc.ptr<si32>, !emitc.ptr<ui8>, !emitc.ptr<ui8>, ui8, ui8, ui8, ui8, ui8, ui8, ui8, ui8, ui8, i1, i1, !emitc.ptr<si32>, ui8, ui8) -> si32 attributes {specifiers = ["extern", "\22C\22"]}
-  emitc.func private @fullyconnected_i8_shift(!emitc.ptr<ui8>, !emitc.ptr<ui8>, !emitc.ptr<si32>, !emitc.ptr<ui8>, !emitc.ptr<ui8>, ui32, ui32, ui32, ui32, i1, !emitc.ptr<si32>, ui32, ui32) -> si32 attributes {specifiers = ["extern", "\22C\22"]}
-  emitc.func private @maxpool_i8(!emitc.ptr<ui8>, !emitc.ptr<ui8>, ui8, ui8, ui8, ui8, ui8, ui8, ui8, ui8) -> si32 attributes {specifiers = ["extern", "\22C\22"]}
-  emitc.func private @quantize(!emitc.ptr<f32>, !emitc.ptr<ui8>, ui32, !emitc.ptr<f32>, !emitc.ptr<ui8>) -> si32 attributes {specifiers = ["extern", "\22C\22"]}
-  emitc.func private @dequantize(!emitc.ptr<ui8>, !emitc.ptr<f32>, ui32, !emitc.ptr<f32>, !emitc.ptr<ui8>, si32, i1) -> si32 attributes {specifiers = ["extern", "\22C\22"]}
-  emitc.func private @transpose_i8(!emitc.ptr<ui8>, !emitc.ptr<ui8>, ui32, ui32, ui32, ui32, ui32, ui32, ui32, ui32, ui8, ui8, ui8, ui8) -> si32 attributes {specifiers = ["extern", "\22C\22"]}
+  emitc.func private @convolution_i8_shift(!emitc.ptr<ui8>, !emitc.ptr<ui8>, !emitc.ptr<si32>, !emitc.ptr<ui8>, !emitc.ptr<ui8>, ui8, ui8, ui8, ui8, ui8, ui8, ui8, ui8, ui8, i1, i1, !emitc.ptr<si32>, ui8, ui8) -> si32 attributes {specifiers = ["extern"]}
+  emitc.func private @fullyconnected_i8_shift(!emitc.ptr<ui8>, !emitc.ptr<ui8>, !emitc.ptr<si32>, !emitc.ptr<ui8>, !emitc.ptr<ui8>, ui32, ui32, ui32, ui32, i1, !emitc.ptr<si32>, ui32, ui32) -> si32 attributes {specifiers = ["extern"]}
+  emitc.func private @maxpool_i8(!emitc.ptr<ui8>, !emitc.ptr<ui8>, ui8, ui8, ui8, ui8, ui8, ui8, ui8, ui8) -> si32 attributes {specifiers = ["extern"]}
+  emitc.func private @quantize(!emitc.ptr<f32>, !emitc.ptr<ui8>, ui32, !emitc.ptr<f32>, !emitc.ptr<ui8>) -> si32 attributes {specifiers = ["extern"]}
+  emitc.func private @dequantize(!emitc.ptr<ui8>, !emitc.ptr<f32>, ui32, !emitc.ptr<f32>, !emitc.ptr<ui8>, si32, i1) -> si32 attributes {specifiers = ["extern"]}
+  emitc.func private @transpose_i8(!emitc.ptr<ui8>, !emitc.ptr<ui8>, ui32, ui32, ui32, ui32, ui32, ui32, ui32, ui32, ui8, ui8, ui8, ui8) -> si32 attributes {specifiers = ["extern"]}
   emitc.func @main_graph(%arg0: !emitc.ptr<f32>, %arg1: !emitc.ptr<f32>) {
     %0 = "emitc.constant"() <{value = 40 : i32}> : () -> i32
     %1 = "emitc.constant"() <{value = 1 : si32}> : () -> si32
