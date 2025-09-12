@@ -242,9 +242,39 @@ ONNX Model → ONNX MLIR → LLVM IR → Binary
 
 ## Testing
 
-### Comprehensive Test Suite
+### Using Docker (Recommended)
 
-Run all ARX tests:
+The easiest way to build and test MLIR-ARX is using the provided Docker scripts:
+
+1. **Build the project in a container**:
+   ```bash
+   # Build the Docker container with all dependencies
+   ./docker/build-in-container.sh
+   ```
+
+2. **Run tests in the container**:
+   ```bash
+   # Execute the complete test suite
+   ./docker/run-tests.sh
+   ```
+
+3. **Access container for debugging**:
+   ```bash
+   # Start an interactive container session
+   ./docker/run-container.sh
+   # Then SSH into the container: ssh -p 44123 root@localhost
+   ```
+
+The Docker scripts provide:
+- Automated dependency installation
+- Consistent build environment
+- Isolated testing environment
+- Test result artifacts in `artifacts/test_results/`
+
+### Manual Testing
+
+If you prefer to run tests manually:
+
 ```bash
 cd test/mlir-arx
 python run.py

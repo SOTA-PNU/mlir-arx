@@ -81,7 +81,7 @@ for (name, test, input_param, input_file, pred_file) in test_list:
     if os.path.exists(tmp_file_path + ".onnx.mlir"):
         os.rename(tmp_file_path + ".onnx.mlir", os.path.join(artifacts_dir, f"{safe_name}.onnx.mlir"))
     if os.path.exists(tmp_file_path):
-        os.rename(tmp_file_path, os.path.join(artifacts_dir, f"{safe_name}.out"))
+        os.rename(tmp_file_path, os.path.join(artifacts_dir, f"{safe_name}.c"))
 
 print()
 print("Summary:")
