@@ -110,7 +110,13 @@ unit-test:
   needs:
     - job: build
       artifacts: true
-
+  artifacts:
+    paths:
+      - artifacts/test_results/
+    expire_in: 1 week
+    when: always
+    reports:
+      junit: artifacts/test_results/test_results.xml
   before_script:
     # - apt update && apt-get install -y libprotobuf-dev python3.12 zip
     - export PATH=${CI_PROJECT_DIR}/artifacts:$PATH
