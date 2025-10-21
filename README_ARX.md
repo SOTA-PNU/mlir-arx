@@ -8,12 +8,10 @@ MLIR-ARX is an enhanced version of ONNX-MLIR that provides specialized support f
 - [ARX Accelerator Features](#arx-accelerator-features)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Testing](#testing)
 - [ARX-Specific Usage](#arx-specific-usage)
 - [HARX Dialect](#harx-dialect)
 - [Compilation Pipeline](#compilation-pipeline)
-- [Testing](#testing)
-- [Examples](#examples)
-- [Contributing](#contributing)
 
 ## Overview
 
@@ -133,8 +131,11 @@ The script `./test/mlir-arx/run.py` contains automated validation routines. The 
 The workflow is straightforward: for example, when testing lowering from onnx to harx, the script reads files from each folder and compares the compiler output.
 
 
+## Testing
 
-### Test with MNIST Example
+### Automated Testing
+
+To streamline the validation process, run all tests automatically with the provided script. Navigate to the test directory and execute:
 
 ```bash
 cd test/mlir-arx
@@ -148,6 +149,37 @@ python run.py
 # ✅ MNIST : Onnx to EmitC
 # ✅ MNIST : Onnx to ARX
 # ✅ MNIST : Onnx to ONNX-MLIR
+```
+
+This command will perform comprehensive checks for the ARX pipelines, ensuring that each step of the compilation and execution process functions correctly.
+
+```bash
+cd test/mlir-arx
+python run.py
+```
+
+### Manual Testing for ARX Compilation
+
+```bash
+# Compile the ONNX model to EmitC MLIR with ARX acceleration
+$ onnx-mlir --maccel=ARX --EmitEmitCIR --EmitMLIR ./mnist-12-int8.onnx -o ./onnx_to_emitc.mlir
+
+# Translate the MLIR file into C++ code
+$ mlir-translate -mlir-to-cpp ./onnx_to_emitc.mlir -o ./mlir_mnist_onnx.h
+
+# Generate ARX-optimized C++ code from the translated file
+$ code_to_arx.py -i ./mlir_mnist_onnx.h -o mnist_onnx.h
+```
+
+### Test Files Structure
+```
+test/mlir-arx/
+├── onnx/           # Input ONNX models
+├── emitc/          # EmitC MLIR files
+├── harx/           # HARX MLIR files
+├── mlir/           # Standard ONNX MLIR
+├── code/           # Generated C++ code
+└── arx/            # ARX-optimized C++ code
 ```
 
 ## ARX-Specific Usage
@@ -243,285 +275,9 @@ ONNX Model → EmitC Dialect → C++ Code → ARX Binary
 - Easier debugging
 - Standard C++ toolchain
 
-### 3. Standard ONNX Pipeline (Fallback)
-```
-ONNX Model → ONNX MLIR → LLVM IR → Binary
-```
-**Command**: `onnx-mlir --maccel=ARX --EmitMLIR model.onnx`
-
-**Benefits**:
-- Full ONNX compatibility
-- Gradual ARX adoption
-- Debugging reference
-
-## Testing
-
-### Using Docker (Recommended)
-
-The easiest way to build and test MLIR-ARX is using the provided Docker scripts:
-
-1. **Build the project in a container**:
-   ```bash
-   # Build the Docker container with all dependencies
-   ./docker/build-in-container.sh
-   ```
-
-2. **Run tests in the container**:
-   ```bash
-   # Execute the complete test suite
-   ./docker/run-tests.sh
-   ```
-
-3. **Access container for debugging**:
-   ```bash
-   # Start an interactive container session
-   ./docker/run-container.sh
-   # Then SSH into the container: ssh -p 44123 root@localhost
-   ```
-
-The Docker scripts provide:
-- Automated dependency installation
-- Consistent build environment
-- Isolated testing environment
-- Test result artifacts in `artifacts/test_results/`
-
-### Manual Testing
-
-If you prefer to run tests manually:
-
-```bash
-cd test/mlir-arx
-python run.py
-```
-
-### Individual Test Categories
-
-```bash
-# Test ARX C++ code generation
-./code_to_arx.py -i ./code/mnist_onnx.h -o ./arx/mnist_onnx.h
-
-# Test EmitC to C++ conversion
-mlir-translate -mlir-to-cpp ./emitc/onnx_to_emitc.mlir -o output.h
-
-# Test ONNX to ARX compilation
-onnx-mlir --maccel=ARX --EmitARXIR --EmitMLIR ./onnx/mnist-12-int8.onnx
-```
-
-### Test Files Structure
-```
-test/mlir-arx/
-├── onnx/           # Input ONNX models
-├── emitc/          # EmitC MLIR files
-├── harx/           # HARX MLIR files
-├── mlir/           # Standard ONNX MLIR
-├── code/           # Generated C++ code
-├── arx/            # ARX-optimized C++ code
-└── test_code/      # Test utilities
-```
-
-## Examples
-
-### MNIST Classification
-
-Complete MNIST example with ARX acceleration:
-
-1. **Prepare the model**:
-   ```bash
-   cd docs/mnist_example
-   python gen_mnist_onnx.py --export-onnx
-   ```
-
-2. **Compile for ARX**:
-   ```bash
-   onnx-mlir --maccel=ARX -O3 mnist.onnx
-   ```
-
-3. **Run inference**:
-   ```c++
-   #include "OnnxMlirRuntime.h"
-   
-   // Load ARX-compiled model
-   OMExecutionSession session("mnist.so");
-   
-   // Run inference
-   auto outputs = session.run({input_tensor});
-   ```
-
-### Custom Model Integration
-
-For your own models:
-
-```bash
-# Convert PyTorch/TensorFlow model to ONNX
-python convert_to_onnx.py --model your_model --output model.onnx
-
-# Quantize for ARX (optional but recommended)
-python quantize_model.py --input model.onnx --output model_int8.onnx
-
-# Compile with ARX acceleration
-onnx-mlir --maccel=ARX -O3 model_int8.onnx
-
-# Integrate in your application
-# See docs/mnist_example/ for complete integration examples
-```
-
-## Performance Tips
-
-### Optimization Best Practices
-
-1. **Use Quantization**: INT8 models perform significantly better on ARX
-   ```bash
-   # Always prefer quantized models
-   onnx-mlir --maccel=ARX -O3 model_int8.onnx
-   ```
-
-2. **Choose Right Pipeline**: Use direct ARX pipeline for maximum performance
-   ```bash
-   # Best performance
-   onnx-mlir --maccel=ARX --EmitARXIR model.onnx
-   ```
-
-3. **Optimize Data Layout**: Ensure compatible tensor layouts
-   ```bash
-   # Check model compatibility
-   onnx-mlir --maccel=ARX --check-compatibility model.onnx
-   ```
-
-### Memory Optimization
-
-- **Batch Size**: Optimize batch size for ARX memory architecture
-- **Tensor Sizes**: Align tensor dimensions with ARX requirements  
-- **Memory Layout**: Use ARX-optimized memory layouts when possible
-
-## Troubleshooting
-
-### Common Issues
-
-#### Compilation Errors
-```bash
-# Check ARX compatibility
-onnx-mlir --maccel=ARX --verify model.onnx
-
-# Debug with verbose output
-onnx-mlir --maccel=ARX --debug-level=3 model.onnx
-```
-
-#### Runtime Issues
-```bash
-# Check ARX driver installation
-arx-info --version
-
-# Verify model format
-onnx-mlir --maccel=ARX --validate model.so
-```
-
-#### Performance Issues
-```bash
-# Profile ARX execution
-onnx-mlir --maccel=ARX --enable-profiling model.onnx
-
-# Check optimization levels
-onnx-mlir --maccel=ARX -O3 --print-optimizations model.onnx
-```
-
-## Contributing
-
-### Development Setup
-
-1. **Fork and clone**:
-   ```bash
-   git clone https://github.com/your-fork/mlir-arx.git
-   cd mlir-arx
-   ```
-
-2. **Setup development environment**:
-   ```bash
-   # Install pre-commit hooks
-   pip install pre-commit
-   pre-commit install
-   
-   # Build in debug mode
-   mkdir build-debug && cd build-debug
-   cmake -DCMAKE_BUILD_TYPE=Debug -DONNX_MLIR_ENABLE_ARX=ON ..
-   make -j$(nproc)
-   ```
-
-### Adding ARX Operations
-
-1. **Define HARX operation** in `src/Accelerators/ARX/Dialect/HARX/HARX.td`
-2. **Implement operation logic** in `src/Accelerators/ARX/Dialect/HARX/HARXOps/`
-3. **Add ONNX lowering** in `src/Accelerators/ARX/Conversion/ONNXToHARX/`
-4. **Add EmitC lowering** in `src/Accelerators/ARX/Conversion/HARXToLLVM/`
-5. **Write tests** in `test/mlir-arx/`
-
-### Testing Guidelines
-
-```bash
-# Run ARX-specific tests
-cd test/mlir-arx
-python run.py
-
-# Add new test cases
-echo "New test description" >> test_cases.txt
-
-# Validate against reference
-./validate_output.py --reference ref.mlir --test new.mlir
-```
-
-### Code Style
-
-- Follow MLIR coding conventions
-- Use ARX-specific naming: `harx.*` for dialect operations
-- Add comprehensive documentation for new features
-- Include performance benchmarks for optimizations
-
-## Architecture
-
-### ARX Accelerator Integration
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    ONNX-MLIR Frontend                       │
-└─────────────────────┬───────────────────────────────────────┘
-                      │
-┌─────────────────────▼───────────────────────────────────────┐
-│                 ONNX Dialect                                │
-└─────────────────────┬───────────────────────────────────────┘
-                      │
-              ┌───────▼────────┐
-              │ ARX Accelerator │
-              │   Selection     │
-              └───────┬────────┘
-                      │
-         ┌────────────▼─────────────┐
-         │                          │
-┌────────▼─────────┐    ┌──────────▼──────────┐
-│   HARX Dialect   │    │   EmitC Dialect     │
-│  (Direct ARX)    │    │  (Portable C++)     │
-└────────┬─────────┘    └──────────┬──────────┘
-         │                         │
-┌────────▼─────────┐    ┌──────────▼──────────┐
-│ ARX Code Gen     │    │  C++ Code Gen       │
-└────────┬─────────┘    └──────────┬──────────┘
-         │                         │
-         └────────────┬────────────┘
-                      │
-              ┌───────▼────────┐
-              │ ARX Hardware   │
-              │   Execution    │
-              └────────────────┘
-```
-
 ## License
 
 This project is licensed under Apache-2.0 License. See [LICENSE](LICENSE) for details.
-
-## Support
-
-- **Documentation**: See `docs/` directory for detailed guides
-- **Issues**: Report bugs via GitHub Issues
-- **Community**: Join the discussion on ONNX-MLIR slack channels
-- **Examples**: Check `test/mlir-arx/` and `docs/mnist_example/` for working examples
 
 ## Acknowledgments
 
