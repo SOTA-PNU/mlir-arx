@@ -275,6 +275,26 @@ ONNX Model → EmitC Dialect → C++ Code → ARX Binary
 - Easier debugging
 - Standard C++ toolchain
 
+# Library Dependency Version
+
+```
+MLIR-ARX
+ 7eee6a1f885817c415dd91efcd45c2a0015f411d third_party/arx-api (heads/master) 
+ 2dd015dfef425c866d9a43f2c67d8b52d709acb6 third_party/benchmark (v1.8.0)
+ 3bf92c03a9f27eba3bda1e5b9e63ea20ec213557 third_party/onnx (v1.16.2)
+ 5b0a6fc2017fcc176545afe3e09c9f9885283242 third_party/pybind11 (v2.10.4)
+ ff6af6fc683159deb51c543b065eba14dfcf329b third_party/rapidcheck (heads/master)
+ 8dd667a74ea1a7330390a0ba343d7c4c6f2d834d third_party/stablehlo (v1.7.6-6-g8dd667a7)
+ 
+Entering 'third_party/onnx'
+ 2dd015dfef425c866d9a43f2c67d8b52d709acb6 third_party/benchmark (v1.8.0)
+ 5b0a6fc2017fcc176545afe3e09c9f9885283242 third_party/pybind11 (v2.10.4)
+
+Entering 'third_party/pybind11'
+Entering 'third_party/rapidcheck'
+ 03d122a35c3f5c398c43095a87bc82ed44642516 ext/catch (v2.0.1-403-g03d122a3)
+ e38ef3be887afc0089005e394c5001002e313960 ext/googletest (release-1.8.0-3122-ge38ef3be)
+```
 ## License
 
 This project is licensed under Apache-2.0 License. See [LICENSE](LICENSE) for details.
