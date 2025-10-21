@@ -44,64 +44,95 @@ The ARX accelerator provides hardware acceleration for:
 - **Efficient Memory Management**: Optimized data layouts and memory access patterns
 - **Low Latency**: Direct hardware execution without software emulation
 
+---
+
 ## Installation
-
-### Prerequisites
-
-Same as ONNX-MLIR:
-```bash
-python >= 3.8
-gcc >= 6.4
-protobuf >= 4.21.12
-cmake >= 3.13.4
-make >= 4.2.1 or ninja >= 1.10.2
-```
 
 ### Build Instructions
 
-1. **Clone the repository**:
-   ```bash
-   git clone <repository-url> mlir-arx
-   cd mlir-arx
-   ```
+### Checking LLVM Version Dependencies
 
-2. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+The LLVM version used by ONNX-MLIR is determined based on the file located at the following path:
+`./third_party/stablehlo/build_tools/llvm_version.txt`
 
-3. **Build MLIR-ARX**:
-   ```bash
-   # Build with ARX support enabled
-   ./utils/clone-mlir.sh
-   mkdir build && cd build
-   cmake -G Ninja \
-     -DCMAKE_BUILD_TYPE=Release \
-     -DONNX_MLIR_ENABLE_ARX=ON \
-     -DMLIR_DIR=../llvm-project/build/lib/cmake/mlir \
-     -DLLVM_DIR=../llvm-project/build/lib/cmake/llvm \
-     ..
-   cmake --build .
-   ```
+### Environment Setup: Docker and Visual Studio Code Dev Container
 
-4. **Verify installation**:
-   ```bash
-   ./build/Debug/bin/onnx-mlir --help
-   ```
+This project can be built and run in two environments.
+
+#### 1. Docker
+
+1. Repository Clone
+```bash
+$ git clone --recursive https://gitlab.com/ones-ai/mlir-arx
+$ cd mlir-arx
+```
+2. Image Build
+```bash
+$ docker build -f ./docker/Dockerfile .
+```
+3. Run Container  
+```bash
+$ docker run -it <container_id> /bin/bash
+```
+
+#### 2. Visual Studio Code Dev Container (in Devcontainer)
+
+Using Dev Containers makes it easy to set up your development environment.
+
+1. Open Container in VS Code
+   - Open VS Code and navigate to your project folder via `File → Open Folder...`.
+   - Open the Command Palette (`Ctrl+Shift+P`) and select "Dev Containers: rebuild without cache and reopen in container".
+2. Working Inside the Container  
+   - Once the container starts, run the following command in the embedded terminal to keep the repository up-to-date:
+```bash
+$ git pull
+```
+
+You can now edit, build, and debug your code via VS Code within the Dev Container environment.
+
+All prerequisite environment setup for ONNX-MLIR builds is complete. The LLVM and MLIR environments are now configured, and builds proceed using the base image defined in `.devcontainer/Dockerfile`.
+
+### Process of MLIR-ARX Build
+
+Detailed information is defined in the [`.gitlab-ci.yml`](.gitlab-ci.yml) file, which describes how to configure the build environment using Docker files and Dev Containers. The main steps of the build process, which runs automatically within the CI/CD pipeline.
+
+#### 1. Requirment: before build
+
+```sh
+$ cd /workdir
+$ mkdir -p build && cd build
+```
+
+#### 2. Build
+Use the command below to generate the CMake configuration file for the Ninja build system, then proceed with the build. The key point is the `CMAKE_BUILD_TYPE` option. Building in Release mode may cause issues with the program, so please ensure you build in Debug mode.
+
+```sh
+$ cmake -G Ninja -DLLVM_DIR=/build/lib/cmake/llvm \
+         -DCMAKE_CXX_COMPILER=${LLVM_PROJECT_ROOT}/build/bin/clang++ \
+         -DCMAKE_C_COMPILER=${LLVM_PROJECT_ROOT}/build/bin/clang-20 \
+         -DCMAKE_BUILD_TYPE=Debug -DLLVM_ENABLE_ASSERTIONS=OFF \
+         -DMLIR_DIR=${LLVM_PROJECT_ROOT}/build/lib/cmake/mlir \
+         -DONNX_MLIR_ACCELERATORS=ARX \
+         -DCMAKE_LIBRARY_PATH=${LLVM_PROJECT_ROOT}/build/lib ..
+$ cmake --build .
+```
+
+`LLVM_PROJECT_ROOT`는 `./.devcontainer/Dockerfile`에 `ENV`로 정의가 되어 있습니다. 
+
+---
 
 ## Quick Start
+### Want to test right away?
 
-### Basic Usage
+If you have Ubuntu 22.04 and protobuf installed, you can download the `artifacts` from the `build` pipeline at `https://gitlab.com/ones-ai/mlir-arx/-/artifacts` and run the binaries directly.
 
-Compile an ONNX model for ARX acceleration:
+### Looking for example usage code?
 
-```bash
-# Compile to ARX-optimized shared library
-./onnx-mlir --maccel=ARX -O3 model.onnx
+The script `./test/mlir-arx/run.py` contains automated validation routines. The code is simple Python, making it easy to understand. While integration with CTEST or GTEST was considered, the `ONNX-MLIR` project uses its own unique test code structure, which increased implementation complexity. Therefore, independent test scripts were created.
 
-# Generate ARX-specific MLIR
-./onnx-mlir --maccel=ARX --EmitARXIR model.onnx
-```
+The workflow is straightforward: for example, when testing lowering from onnx to harx, the script reads files from each folder and compares the compiler output.
+
+
 
 ### Test with MNIST Example
 
@@ -139,23 +170,6 @@ onnx-mlir --maccel=ARX --EmitEmitCIR --EmitMLIR model.onnx
 
 # Standard ONNX MLIR with ARX optimizations
 onnx-mlir --maccel=ARX --EmitMLIR model.onnx
-```
-
-#### Optimization Levels
-```bash
-# Maximum optimization for ARX
-onnx-mlir --maccel=ARX -O3 model.onnx
-```
-
-### Environment Variables
-
-Configure ARX-specific behavior:
-```bash
-# Enable ARX optimizations
-export ONNX_MLIR_FLAGS="--maccel=ARX -O3"
-
-# Custom ARX configurations
-export ARX_CONFIG_PATH="/path/to/arx/config"
 ```
 
 ## HARX Dialect
