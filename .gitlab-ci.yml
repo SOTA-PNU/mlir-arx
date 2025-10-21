@@ -2,6 +2,7 @@ stages:
   - build-docker
   - build
   - unit-test
+  - board-test
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
@@ -125,3 +126,67 @@ unit-test:
     - python3 run.py
   dependencies:
     - build
+
+
+mlir_mnist_test:
+  stage: board-test
+  # needs:
+  #   - job: build
+  #     artifacts: true
+  variables:
+    APP_PATH: "/home/arx/arx_hw_platform/platform_2nd/arx_2nd/app"
+    APP_NAME: "mnist_mlir_test"
+    CODE_PATH: "third_party/arx-api/test/board_test/mlir_mnist"
+    EXEC_PATH: "/home/arx/arx_hw_platform/platform_2nd/arx_2nd"
+    EXEC_NAME: "workspace"
+    ARX_PATH: "./third_party/arx-api"
+
+  before_script:
+    - echo "current user is $(whoami)"
+    # - export PATH=${CI_PROJECT_DIR}/artifacts:$PATH
+    - rm -rf ${APP_PATH}/${APP_NAME}/${CI_PROJECT_NAME}
+    - mkdir -p ${APP_PATH}/${APP_NAME}/${CI_PROJECT_NAME}
+    - cp -r ./${ARX_PATH}/include ${APP_PATH}/${APP_NAME}/src
+    - cp -r ./${ARX_PATH}/lib ${APP_PATH}/${APP_NAME}/src
+    - cp -r ./${ARX_PATH}/test/board_test/mlir_mnist/src ${APP_PATH}/${APP_NAME}/src
+    - rm -rf ${APP_PATH}/${APP_NAME}/src/src/mnist_onnx.h # remove mnist_onnx.h file, will be compile later
+    - cp ./test/mlir-arx/arx/mnist_onnx.h ${APP_PATH}/${APP_NAME}/src/src/mnist_onnx.h
+    # - |
+    #   onnx-mlir --maccel=ARX --EmitEmitCIR --EmitMLIR ./test/mlir-arx/onnx/mnist-12-int8.onnx -o ./onnx_to_emitc.mlir
+    #   mlir-translate -mlir-to-cpp ./onnx_to_emitc.mlir host_mnist_onnx.h
+    #   python3 ./test/mlir-arx/code_to_arx.py -i host_mnist_onnx.h -o ${APP_PATH}/${APP_NAME}/src/mnist_onnx.h
+  script:
+    - cd ${CI_PROJECT_DIR}/${CODE_PATH}
+    - make run_on_host
+    - cd ${EXEC_PATH}/${EXEC_NAME}
+    - pwd
+    - rm -f minicom_output.txt
+    - make mcom
+    - make ${APP_NAME}.all
+    - sleep 1m
+    - sudo chmod 666 minicom_output.txt
+    - cat ${CI_PROJECT_DIR}/${CODE_PATH}/c_code_output.txt
+    - cat minicom_output.txt
+    - python3 ${CI_PROJECT_DIR}/${ARX_PATH}/test/board_test/mnist/util/process_minicom_output.py
+    - diff -w ${CI_PROJECT_DIR}/${CODE_PATH}/c_code_output.txt minicom_output.txt
+  after_script:
+    - sudo kill $(pgrep minicom)
+    - cd $APP_PATH
+    - cd $APP_NAME
+    - make clean
+  tags:
+    - rvx-board
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: always
+    - if: $CI_PROJECT_NAMESPACE != "ones-ai"
+      when: manual
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: always
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+      when: manual
+
