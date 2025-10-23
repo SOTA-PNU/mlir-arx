@@ -1,4 +1,4 @@
-FROM ghcr.io/onnxmlir/onnx-mlir-dev
+FROM ghcr.io/onnxmlir/onnx-mlir-dev:latest@sha256:d9a98e9e07476f88282179cdbc2a222900a3f7232a66bd952d171014a28b838e
 WORKDIR /workdir
 ENV HOME=/workdir
 ENV NPROC=40
