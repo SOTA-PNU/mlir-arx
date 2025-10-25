@@ -95,4 +95,4 @@ RUN apt-get install -y libprotobuf-dev zip
 #                 ..  && \
 #     cmake --build .
 
-CMD ["/usr/sbin/sshd", "-D"]
+# CMD ["/usr/sbin/sshd", "-D"]
