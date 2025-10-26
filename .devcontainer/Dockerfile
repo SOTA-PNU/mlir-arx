@@ -1,4 +1,4 @@
-FROM ghcr.io/onnxmlir/onnx-mlir-dev
+FROM registry.gitlab.com/ones-ai/mlir-arx:onnx-mlir-dev
 WORKDIR /workdir
 ENV HOME=/workdir
 ENV NPROC=40
