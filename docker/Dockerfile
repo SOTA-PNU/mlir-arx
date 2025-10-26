@@ -80,6 +80,20 @@ RUN apt-get update && apt-get install -y openssh-server git && \
 
 RUN apt-get install -y libprotobuf-dev zip
 
+RUN git clone https://github.com/abseil/abseil-cpp.git && \
+    cd abseil-cpp && git checkout lts_2024_07_22 && mkdir build && cd build && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DABSL_PROPAGATE_CXX_STD=ON && \
+    cmake --build . -j${NPROC} && \
+    cmake --install .
+
+ARG PROTOBUF_VERSION=21.12
+RUN git clone -b v${PROTOBUF_VERSION} --recursive https://github.com/protocolbuffers/protobuf.git \
+    && cd protobuf && ./autogen.sh \
+    && ./configure --enable-static=no \
+    && make -j${NPROC} install && ldconfig \
+    && cd python && python3 setup.py install --cpp_implementation \
+    && cd ../.. && rm -rf protobuf
+
 # RUN ACCEL=ARX NPROC=80 WORKDIR=/workdir LLVM_PROJECT_ROOT=${WORKDIR}/llvm-project \
 #     cd ${WORKDIR} && \
 #     git clone --recursive https://gitlab.com/ones-ai/mlir-arx -b chacha/mlir-arx && \
