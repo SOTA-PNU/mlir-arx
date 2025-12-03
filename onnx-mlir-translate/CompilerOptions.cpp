@@ -22,7 +22,7 @@
 #define DEBUG_TYPE "compiler_options"
 
 
-#define IS_ONNX_TRANSLATE 0
+#define IS_ONNX_TRANSLATE 1
 
 // Default env var where to find default options, when defined.
 const std::string OnnxMlirEnvOptionName = "ONNX_MLIR_FLAGS";
